@@ -1,8 +1,48 @@
-from collections import deque
-from math import *
+import math
 import random
 
 import numpy as np
+
+
+class CodeBook():
+    """Generate the 2-D beamforming codebook"""
+    def __init__(self, codes, antennas, phases=16):
+        """
+        initial class attributes:
+        codes (int): the amount of codes
+        antennas (int): the amount of antennas in horizontal or vertical dimension
+        phases (int): the amount of available phases
+        """
+        self.codes = codes
+        self.antennas = antennas
+        self.phases = phases
+        self.scaled = False
+
+    def _element(self, num_code, num_antenna):
+        temp1 = (num_code+self.codes/2) % self.codes
+        temp2 = math.floor(num_antenna*temp1/(self.codes/self.phases))
+        value = 1 / math.sqrt(self.antennas) * np.exp(1j*2*math.pi/self.phases*temp2)
+        return value
+    
+    def generate(self):
+        """
+        Generate the codebook of shape (self.codes, self.antennas)
+        """
+        if hasattr(self, 'book'):
+            return self.book
+        book = [[self._element(num_code, num_antenna) for num_antenna in range(self.antennas)]
+                for num_code in range(self.codes)
+            ]
+        self.book = np.array(book)
+        return self.book
+
+    def scale(self):
+        if self.scaled:
+            return
+        if not hasattr(self, 'book'):
+            self.generate()
+        self.book = self.book * math.sqrt(self.antennas)
+        self.scaled = True
 
 
 class Memory():
