@@ -17,10 +17,10 @@ def plot2D(cbook, ax):
     # plt.figure(figsize=(8, 8))
     for code in codes:
         thetas = np.linspace(0, 2*math.pi, num=100, endpoint=False)
-        phase_shift = np.array(
+        array_response = np.array(
             [1/math.sqrt(cbook.antennas)*np.exp(1j*math.pi*np.arange(cbook.antennas)*math.cos(theta))
             for theta in thetas])
-        value = abs(np.sum(code*phase_shift, axis=1))
+        value = abs(np.sum(code*array_response, axis=1))
         ax.plot(thetas, value)
 
 def plot3D(cbook_h, cbook_v, choice, ax):
@@ -40,9 +40,9 @@ def plot3D(cbook_h, cbook_v, choice, ax):
     values = np.zeros((len(betas), len(thetas)))
     for i, beta in enumerate(betas):
         for j, theta in enumerate(thetas):
-            phase_shift_v = 1/math.sqrt(cbook_v.antennas)*np.exp(1j*math.pi*np.arange(cbook_v.antennas)*math.sin(beta))
-            phase_shift_h = 1/math.sqrt(cbook_h.antennas)*np.exp(1j*math.pi*np.arange(cbook_h.antennas)*math.cos(theta)*math.cos(beta))
-            values[i, j] = abs(np.sum(np.kron(code_v*phase_shift_v, code_h*phase_shift_h)))
+            array_response_v = 1/math.sqrt(cbook_v.antennas)*np.exp(1j*math.pi*np.arange(cbook_v.antennas)*math.sin(beta))
+            array_response_h = 1/math.sqrt(cbook_h.antennas)*np.exp(1j*math.pi*np.arange(cbook_h.antennas)*math.cos(theta)*math.cos(beta))
+            values[i, j] = abs(np.sum(np.kron(code_v*array_response_v, code_h*array_response_h)))
 
     THETA, BETA = np.meshgrid(thetas, betas)
     X = values * np.cos(BETA) * np.sin(THETA)
