@@ -9,12 +9,12 @@ from utils import CodeBook
 
 def plot2D(cbook, ax):
     """unifomr linear array beamforming pattern plotting
+
     Parameters:
-    cbook (np.array): the 2-D codebook
-    ax (axes.SubplotBase)
+        cbook (np.array): the 2-D codebook
+        ax (axes.SubplotBase)
     """
     codes = cbook.generate()
-    # plt.figure(figsize=(8, 8))
     for code in codes:
         thetas = np.linspace(0, 2*math.pi, num=100, endpoint=False)
         array_response = np.array(
@@ -25,11 +25,12 @@ def plot2D(cbook, ax):
 
 def plot3D(cbook_h, cbook_v, choice, ax):
     """uniform rectangular array beamforming pattern plotting
+
     Parameters:
-    cbook_h (np.array): horizontal beamforming codebook
-    cbook_v (np.array): vertical beamforming codebook
-    choice (tuple): beamforming code choice
-    ax (axes.SubplotBase)
+        cbook_h (np.array): horizontal beamforming codebook
+        cbook_v (np.array): vertical beamforming codebook
+        choice (tuple): beamforming code choice
+        ax (axes.SubplotBase)
     """
     cbook_h.scale()
     cbook_v.scale()

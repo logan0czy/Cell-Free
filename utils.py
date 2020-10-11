@@ -20,9 +20,9 @@ class CodeBook():
     def __init__(self, codes, antennas, phases=16):
         """
         initial class attributes:
-        codes (int): the amount of codes
-        antennas (int): the amount of antennas in horizontal or vertical dimension
-        phases (int): the amount of available phases
+            codes (int): the amount of codes
+            antennas (int): the amount of antennas in horizontal or vertical dimension
+            phases (int): the amount of available phases
         """
         self.codes = codes
         self.antennas = antennas
