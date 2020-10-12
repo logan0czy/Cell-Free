@@ -9,6 +9,9 @@ import torch
 def combineShape(length, shape=None):
     """
     Reference: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/td3/core.py
+
+    Return:
+        tuple: (length, *shape)
     """
     if shape is None:
         return (length, )
@@ -19,7 +22,7 @@ class CodeBook():
 
     def __init__(self, codes, antennas, phases=16):
         """
-        initial class attributes:
+        Parameters:
             codes (int): the amount of codes
             antennas (int): the amount of antennas in horizontal or vertical dimension
             phases (int): the amount of available phases
@@ -30,14 +33,17 @@ class CodeBook():
         self.scaled = False
 
     def _element(self, code_num, antenna_num):
+        """get the (code_num, antenna_num) element's value."""
         temp1 = (code_num+self.codes/2) % self.codes
         temp2 = math.floor(antenna_num*temp1/(self.codes/self.phases))
         value = 1 / math.sqrt(self.antennas) * np.exp(1j*2*math.pi/self.phases*temp2)
         return value
     
     def generate(self):
-        """
-        Generate the codebook of shape (self.codes, self.antennas)
+        """Generate the codebook of shape (self.codes, self.antennas)
+
+        Return:
+            codebook
         """
         if hasattr(self, 'book'):
             return self.book
@@ -48,6 +54,11 @@ class CodeBook():
         return self.book
 
     def scale(self):
+        """Rescale the codebook
+
+        Return:
+            codebook: shape (self.codes, self.antennas)
+        """
         if self.scaled:
             return self.book
         if not hasattr(self, 'book'):
@@ -57,8 +68,7 @@ class CodeBook():
         return self.book
 
 class ReplayBuffer():
-    """
-    An experience replay buffer.
+    """An experience replay buffer.
     Reference: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/td3/td3.py
     """
 
