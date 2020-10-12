@@ -39,7 +39,7 @@ def plot3D(cbook_h, cbook_v, choice, ax):
 
     thetas = np.linspace(0, 2*math.pi, 100, endpoint=False)
     betas = np.linspace(-math.pi/2, math.pi/2, 50)
-    values = np.zeros((len(betas), len(thetas)))
+    values = np.zeros((len(betas), len(thetas)), dtype=np.float32)
     for i, beta in enumerate(betas):
         for j, theta in enumerate(thetas):
             array_response_v = 1/math.sqrt(cbook_v.antennas)*np.exp(1j*math.pi*np.arange(cbook_v.antennas)*math.sin(beta))
