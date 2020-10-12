@@ -160,10 +160,10 @@ class Environment():
                 pl = self.pl0 / np.linalg.norm(self.bs_loc[i]-self.user_loc[j])**self.pl_exp[2]
                 theta_azi = self.user2bs_azi[j, i]
                 factor = np.exp(1j*np.random.uniform(-math.pi, math.pi, self.paths))
-                bs_arr_resp_azi = np.array([1/math.sqrt(self.bs_atn) \
+                bs_arr_resp_azi = np.stack([1/math.sqrt(self.bs_atn) \
                                         *np.exp(1j*math.pi*np.arange(self.bs_atn)*math.sin(np.random.uniform(theta_azi-self.angle_spread, theta_azi+self.angle_spread)))
                                         for i in range(self.paths)])
-                bs2user_csi[i, j] = math.sqrt(pl/self.paths) * np.sum(factor[:, np.newaxis]@bs_arr_resp_azi, axis=0)
+                bs2user_csi[i, j] = math.sqrt(pl/self.paths) * np.sum(factor[:, np.newaxis]*bs_arr_resp_azi, axis=0)
 
         ris2user_csi = np.zeros((ris_num, user_num, math.prod(self.ris_atn)), dtype=np.complex64)
         for i in range(ris_num):
@@ -179,7 +179,7 @@ class Environment():
                     ris_arr_resp[path_id] = math.sqrt(1/math.prod(self.ris_atn)) \
                                             * np.kron(np.exp(1j*math.pi*np.arange(self.ris_atn[1])*math.sin(theta_ele_l)), 
                                                       np.exp(1j*math.pi*np.arange(self.ris_atn[0])*math.cos(theta_azi_l)*math.cos(theta_ele_l)))
-                ris2user_csi[i, j] = math.sqrt(pl/self.paths) * np.sum(factor[:, np.newaxis]@ris_arr_resp, axis=0)
+                ris2user_csi[i, j] = math.sqrt(pl/self.paths) * np.sum(factor[:, np.newaxis]*ris_arr_resp, axis=0)
 
         self.bs2user_csi = self.bs2user_csi*self.rho + math.sqrt(1-self.rho**2)*bs2user_csi if hasattr(self, 'bs2user_csi') else bs2user_csi
         self.ris2user_csi = self.ris2user_csi*self.rho + math.sqrt(1-self.rho**2)*ris2user_csi if hasattr(self, 'ris2user_csi') else ris2user_csi
@@ -208,7 +208,7 @@ if __name__=='__main__':
     np.random.seed(66)
     sns.set()
 
-    env = Environment(20)
+    env = Environment(30)
     # -------- show locations --------
     plt.figure(figsize=(8, 8))
     ax = plt.subplot(111, projection='3d')
