@@ -1,6 +1,7 @@
 import math
-
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 def angle(tgt_loc, src_loc, src_loc_delta):
@@ -17,7 +18,7 @@ def angle(tgt_loc, src_loc, src_loc_delta):
         theta_azi (float): azimuth angle
         theta_ele (float): elevation angle
     """
-    normal_vec = np.zeros(3)
+    normal_vec = np.zeros(3, dtype=np.float32)
     if src_loc_delta[0] == 0:
         normal_vec[0] = 1
     elif src_loc_delta[1] == 0:
@@ -77,12 +78,12 @@ class Environment():
         self.ris_loc_delta = np.array([[1, 0, 0], [1, 0, 0]])
 
         ptr, user_num = 0, 8
-        self.user_loc = np.zeros((user_num, 3)) 
-        for theta in range(math.pi/4, 2*math.pi, math.pi/2):
+        self.user_loc = np.zeros((user_num, 3), dtype=np.float32) 
+        for theta in np.arange(math.pi/4, 2*math.pi, math.pi/2):
             self.user_loc[ptr, 0] = radius*math.cos(theta)
             self.user_loc[ptr, 1] = radius*math.sin(theta)
             ptr += 1
-        for theta in range(0, 2*math.pi, math.pi/2):
+        for theta in np.arange(0, 2*math.pi, math.pi/2):
             self.user_loc[ptr, 0] = radius/2*math.cos(theta)
             self.user_loc[ptr, 1] = radius/2*math.sin(theta)
             ptr += 1
@@ -97,16 +98,16 @@ class Environment():
         """
         bs_num, ris_num, user_num = self.getCount()
         # -------- w.r.t RIS --------
-        self.bs2ris_azi = np.zeros((bs_num, ris_num))
-        self.bs2ris_ele = np.zeros((bs_num, ris_num))
+        self.bs2ris_azi = np.zeros((bs_num, ris_num), dtype=np.float32)
+        self.bs2ris_ele = np.zeros((bs_num, ris_num), dtype=np.float32)
         for i in range(bs_num):
             for j in range(ris_num):
                 theta_azi, theta_ele = angle(self.bs_loc[i], self.ris_loc[j], self.ris_loc_delta[j])
                 self.bs2ris_azi[i, j] = theta_azi
                 self.bs2ris_ele[i, j] = theta_ele
 
-        self.user2ris_azi = np.zeros((user_num, ris_num))
-        self.user2ris_ele = np.zeros((user_num, ris_num))
+        self.user2ris_azi = np.zeros((user_num, ris_num), dtype=np.float32)
+        self.user2ris_ele = np.zeros((user_num, ris_num), dtype=np.float32)
         for i in range(user_num):
             for j in range(ris_num):
                 theta_azi, theta_ele = angle(self.user_loc[i], self.ris_loc[j], self.ris_loc_delta[j])
@@ -114,13 +115,13 @@ class Environment():
                 self.user2ris_ele[i, j] = theta_ele
 
         # -------- w.r.t base station --------
-        self.ris2bs_azi = np.zeros((ris_num, bs_num))
+        self.ris2bs_azi = np.zeros((ris_num, bs_num), dtype=np.float32)
         for i in range(ris_num):
             for j in range(bs_num):
                 theta_azi, _ = angle(self.ris_loc[i], self.bs_loc[j], self.bs_loc_delta[j])
                 self.ris2bs_azi[i, j] = theta_azi
 
-        self.user2bs_azi = np.zeros((user_num, bs_num))
+        self.user2bs_azi = np.zeros((user_num, bs_num), dtype=np.float32)
         for i in range(user_num):
             for j in range(bs_num):
                 theta_azi, _ = angle(self.user_loc[i], self.bs_loc[j], self.bs_loc_delta[j])
@@ -141,7 +142,7 @@ class Environment():
         """
         bs_num, ris_num, user_num = self.getCount()
         if not hasattr(self, 'bs2ris_csi'):
-            self.bs2ris_csi = np.zeros((bs_num, ris_num, math.prod(self.ris_atn), self.bs_atn)) 
+            self.bs2ris_csi = np.zeros((bs_num, ris_num, math.prod(self.ris_atn), self.bs_atn), dtype=np.complex64) 
             for i in range(bs_num):
                 for j in range(ris_num):
                     pl = self.pl0 / np.linalg.norm(self.bs_loc[i]-self.ris_loc[j])**self.pl_exp[0]
@@ -153,7 +154,7 @@ class Environment():
                                        *np.exp(1j*math.pi*np.arange(self.bs_atn)*math.sin(self.ris2bs_azi[j, i]))
                     self.bs2ris_csi[i, j] = math.sqrt(pl) * np.kron(ris_arr_resp_ele, ris_arr_resp_azi)[:, np.newaxis] @ bs_arr_resp_azi[np.newaxis, :]
         
-        bs2user_csi = np.zeros((bs_num, user_num, self.bs_atn))
+        bs2user_csi = np.zeros((bs_num, user_num, self.bs_atn), dtype=np.complex64)
         for i in range(bs_num):
             for j in range(user_num):
                 pl = self.pl0 / np.linalg.norm(self.bs_loc[i]-self.user_loc[j])**self.pl_exp[2]
@@ -164,14 +165,14 @@ class Environment():
                                         for i in range(self.paths)])
                 bs2user_csi[i, j] = math.sqrt(pl/self.paths) * np.sum(factor[:, np.newaxis]@bs_arr_resp_azi, axis=0)
 
-        ris2user_csi = np.zeros((ris_num, user_num, math.prod(self.ris_atn)))
+        ris2user_csi = np.zeros((ris_num, user_num, math.prod(self.ris_atn)), dtype=np.complex64)
         for i in range(ris_num):
             for j in range(user_num):
                 pl = self.pl0 / np.linalg.norm(self.ris_loc[i]-self.user_loc[j])**self.pl_exp[1]
                 theta_azi = self.user2ris_azi[j, i]
                 theta_ele = self.user2ris_ele[j, i]
                 factor = np.exp(1j*np.random.uniform(-math.pi, math.pi, self.paths))
-                ris_arr_resp = np.zeros((self.paths, math.prod(self.ris_atn)))
+                ris_arr_resp = np.zeros((self.paths, math.prod(self.ris_atn)), dtype=np.complex64)
                 for path_id in range(self.paths):
                     theta_azi_l = np.random.uniform(theta_azi-self.angle_spread, theta_azi+self.angle_spread)
                     theta_ele_l = np.random.uniform(theta_ele-self.angle_spread, theta_ele+self.angle_spread)
@@ -201,3 +202,49 @@ class Environment():
             signal_power = abs(np.sum(((bs2user_csi[:, [user_id]] + temp1) @ bs_beam[:, :, np.newaxis]).squeeze()))**2
             rate = np.log2(1 + signal_power / ((user_num-1)*signal_power+user_num*self.noise))
         return rate
+
+if __name__=='__main__':
+    from utils import CodeBook
+    np.random.seed(66)
+    sns.set()
+
+    env = Environment(20)
+    # -------- show locations --------
+    plt.figure(figsize=(8, 8))
+    ax = plt.subplot(111, projection='3d')
+    ax.scatter(env.bs_loc[:, 0], env.bs_loc[:, 1], env.bs_loc[:, 2], marker='^', s=80, label='base station')
+    ax.scatter(env.ris_loc[:, 0], env.ris_loc[:, 1], env.ris_loc[:, 2], marker='s', s=80, label='ris')
+    ax.scatter(env.user_loc[:, 0], env.user_loc[:, 1], env.user_loc[:, 2], marker='x', s=80, label='user')
+    ax.set_xlabel('X axis')
+    ax.set_ylabel('Y axis')
+    ax.set_zlabel('Z axis')
+    plt.suptitle("Loc diagram", y=0.95)
+    plt.legend()
+    
+    # -------- csi & rate demo --------
+    bs_num, ris_num, user_num = env.getCount()
+    bs_cbook = CodeBook(10, env.bs_atn)
+    bs_cbook.generate()
+    ris_azi_cbook = CodeBook(8, env.ris_atn[0], phases=4)
+    ris_ele_cbook = CodeBook(8, env.ris_atn[1], phases=4)
+    ris_azi_cbook.scale()
+    ris_ele_cbook.scale()
+    # base station beamforming
+    bs_beam = np.zeros((bs_num, env.bs_atn), dtype=np.complex64)
+    for i in range(bs_num):
+        bs_beam[i] = bs_cbook.book[np.random.randint(bs_cbook.codes)]
+    bs_beam = math.sqrt(env.max_power) * bs_beam
+    # ris beamforming
+    ris_beam = np.zeros((ris_num, math.prod(env.ris_atn)), dtype=np.complex64)
+    for i in range(ris_num):
+        ris_beam[i] = np.kron(ris_ele_cbook.book[np.random.randint(ris_ele_cbook.codes)], 
+                              ris_azi_cbook.book[np.random.randint(ris_azi_cbook.codes)])
+    ris_beam_expand = np.zeros(ris_beam.shape+ris_beam.shape[-1:], dtype=ris_beam.dtype)
+    diagonals = ris_beam_expand.diagonal(axis1=-2, axis2=-1)
+    diagonals.setflags(write=True)
+    diagonals[:] = ris_beam.copy()
+    
+    print("demo achievable rate")
+    print(env.getRate(*env.getCSI(), bs_beam, ris_beam_expand))
+
+    plt.show()
