@@ -1,10 +1,12 @@
 import math
+
 import numpy as np
+import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from mpl_toolkits import mplot3d
 import mpl_toolkits.mplot3d.axes3d as axes3d
-from matplotlib import cm
-import seaborn as sns
+
 from utils import CodeBook
 
 
