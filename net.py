@@ -1,6 +1,33 @@
+"""
+Reference: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/td3/core.py
+"""
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
+
+def genLayers(sizes, activation, output_activation=nn.Identity):
+    """generate nn layers
+    
+    Parameters:
+        sizes : each layer's size
+        activation : hidden layer's activation function
+    """
+    layers = [nn.BatchNorm1d(sizes[0])]
+    for i in range(len(sizes)-1):
+        act_func = activation() if i<len(sizes)-2 else output_activation()
+        layers += [nn.Linear(sizes[i], sizes[i+1]), nn.BatchNorm1d(sizes[i+1]), act_func()]
+    return nn.Sequential(*layers)
+
+class Actor(nn.Module):
+    def __init__(self, obs_dim, act_dim, hidden_sizes, activation, act_limit):
+        super().__init__()
+        sizes = [obs_dim] + [*hidden_sizes] + [act_dim]
+        self.L = genLayers(sizes, activation, nn.Tanh)
+        self.act_limit = act_limit
+
+    def forward(self, obs):
+        # Return output from network scaled to action limits.
+        return self.act_limit * self.L(obs)
 
 
 class Actor(nn.Module):
