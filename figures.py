@@ -3,9 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 import mpl_toolkits.mplot3d.axes3d as axes3d
+from matplotlib import cm
 import seaborn as sns
-sns.set()
 from utils import CodeBook
+
 
 def plot2D(cbook, ax):
     """unifomr linear array beamforming pattern plotting
@@ -49,11 +50,13 @@ def plot3D(cbook_h, cbook_v, choice, ax):
     X = values * np.cos(BETA) * np.sin(THETA)
     Y = values * np.cos(BETA) * np.cos(THETA)
     Z = values * np.sin(BETA)
-    picture = ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap=plt.get_cmap('jet'),
+    my_color = cm.jet(values / np.amax(values))
+    surf = ax.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=my_color, cmap=plt.get_cmap('jet'),
         linewidth=0, antialiased=False, alpha=0.5)
-    plt.colorbar(picture, pad=0.1)
+    plt.colorbar(surf, pad=0.1)
 
 if __name__=='__main__':
+    sns.set()
     cbook_bs = CodeBook(10, 4)
     cbook_ris_h, cbook_ris_v = CodeBook(3, 8, phases=4), CodeBook(3, 4, phases=4)
     # -------- show beamforming pattern --------
