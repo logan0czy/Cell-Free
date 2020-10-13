@@ -1,3 +1,8 @@
+"""
+The communication environment which the agent interact with.
+"""
+
+
 import math
 
 import numpy as np
