@@ -14,7 +14,7 @@ def plot2D(cbook, ax):
     """unifomr linear array beamforming pattern plotting
 
     Parameters:
-        cbook (np.array): the 2-D codebook
+        cbook (CodeBook)
         ax (axes.SubplotBase)
     """
     codes = cbook.generate()
@@ -30,8 +30,8 @@ def plot3D(cbook_h, cbook_v, choice, ax):
     """uniform rectangular array beamforming pattern plotting
 
     Parameters:
-        cbook_h (np.array): horizontal beamforming codebook
-        cbook_v (np.array): vertical beamforming codebook
+        cbook_h (CodeBook): horizontal beamforming codebook
+        cbook_v (CodeBook): vertical beamforming codebook
         choice (tuple): beamforming code choice
         ax (axes.SubplotBase)
     """
