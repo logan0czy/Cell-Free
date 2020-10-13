@@ -29,6 +29,16 @@ class Actor(nn.Module):
         # Return output from network scaled to action limits.
         return self.act_limit * self.L(obs)
 
+class QFunc(nn.Module):
+    def __init__(self, obs_dim, act_dim, hidden_sizes, activation):
+        super().__init()__
+        sizes = [obs_dim+act_dim] + [*hidden_sizes] + [1]
+        self.L = genLayers(sizes, activation)
+
+    def forward(self, obs, act):
+        # Return Q value from network
+        obs_act = torch.cat((obs, act), dim=-1)
+        return self.L(obs_act)
 
 class Actor(nn.Module):
   """policy to decide action corresponding to current state."""
