@@ -115,16 +115,19 @@ class OUStrategy():
             act_space: dict,
             mu: float=0,
             theta: float=0.15,
-            max_sigma: float=1,
-            min_sigma: float=None,
-            noise_clip: float=None,
+            max_sigma=None,
+            min_sigma=None,
+            noise_clip=None,
             decay_period: int=10000,
     ):
         """
         Parameters:
-            act_space : keys are {'dim', 'low', 'high'}
-            max_sigma/min_sigma : stddev for Gaussian policy noise
-            noise_clip : limit for absolute value of policy noise
+            act_space : keys are {'dim', 'low', 'high'}, the 'low' & 'high' must be np.array
+                with the same dim to action
+            max_sigma/min_sigma (np.array): stddevs for Gaussian policy noise, and each dim
+                maybe different
+            noise_clip (np.array): limit for absolute value of policy noise, each dim maybe
+                different
             decay_period : time steps for stddev of noise decaying from max_sigma to min_sigma.
         """
         self.act_space = act_space
@@ -132,7 +135,7 @@ class OUStrategy():
         self.theta = theta
         self.sigma = max_sigma
         self._max_sigma = max_sigma
-        self._min_sigma = min_sigma if min_sigma else max_sigma
+        self._min_sigma = min_sigma if min_sigma is not None else max_sigma
         self._decay_period = decay_period
         self.noise_clip = noise_clip
         self.reset()
