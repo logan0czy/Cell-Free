@@ -1,3 +1,8 @@
+"""
+Show the antenna array response shape in 2D/3D beamforming mode.
+"""
+
+
 import math
 
 import numpy as np
