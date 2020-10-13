@@ -13,9 +13,9 @@ def genLayers(sizes, activation, output_activation=nn.Identity):
         activation : hidden layer's activation function
     """
     layers = [nn.BatchNorm1d(sizes[0])]
-    for i in range(len(sizes)-1):
-        act_func = activation() if i<len(sizes)-2 else output_activation()
-        layers += [nn.Linear(sizes[i], sizes[i+1]), nn.BatchNorm1d(sizes[i+1]), act_func()]
+    for i in range(len(sizes)-2):
+        layers += [nn.Linear(sizes[i], sizes[i+1]), nn.BatchNorm1d(sizes[i+1]), activation()]
+    layers += [nn.Linear(sizes[-2], sizes[-1]), output_activation()]
     return nn.Sequential(*layers)
 
 class Actor(nn.Module):
