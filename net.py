@@ -1,4 +1,6 @@
 """
+The main Twin Delayed Deep Determinisic Policy Gradient Network frame.
+
 Reference: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/td3/core.py
 """
 import torch
