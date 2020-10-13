@@ -65,7 +65,7 @@ def plot3D(cbook_h, cbook_v, choice, ax):
 if __name__=='__main__':
     sns.set()
     cbook_bs = CodeBook(10, 4)
-    cbook_ris_h, cbook_ris_v = CodeBook(3, 8, phases=4), CodeBook(3, 4, phases=4)
+    cbook_ris_h, cbook_ris_v = CodeBook(4, 8, phases=4), CodeBook(4, 4, phases=4)
     # -------- show beamforming pattern --------
     plt.figure(figsize=(8, 8))
     ax = plt.subplot(111, polar=True)
@@ -77,5 +77,6 @@ if __name__=='__main__':
         for id_v in range(cbook_ris_v.codes):
             ax = plt.subplot(cbook_ris_h.codes, cbook_ris_v.codes, id_h*cbook_ris_h.codes+id_v+1, projection='3d')
             plot3D(cbook_ris_h, cbook_ris_v, (id_h, id_v), ax)
-    plt.suptitle(f"3-D beamforming with directions: h-{cbook_ris_h.codes} v-{cbook_ris_v.codes}", y=0.95)
+            ax.set_title(f"azi id-{id_h}, ele id-{id_v}")
+    plt.suptitle(f"3-D beamforming", y=0.95)
     plt.show()
