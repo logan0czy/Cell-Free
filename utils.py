@@ -148,7 +148,7 @@ class OUStrategy():
             self.state = np.clip(self.state, -self.noise_clip, self.noise_clip)
         return self.state
 
-    def getActFromRaw(self, raw_act, time_step: int):
+    def getActFromRaw(self, raw_act, time_step: int=0):
         ou_state = self.evolveState()
         self.sigma = (
             self._max_sigma
