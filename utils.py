@@ -3,8 +3,6 @@ import random
 
 import numpy as np
 
-import torch
-
 
 def combineShape(length, shape=None):
     """
@@ -20,19 +18,19 @@ def combineShape(length, shape=None):
 class CodeBook():
     """Generate the 2-D beamforming codebook"""
 
-    def __init__(self, codes, antennas, phases=16):
+    def __init__(self, codes: int, antennas: int, phases: int=16):
         """
         Parameters:
-            codes (int): the amount of codes
-            antennas (int): the amount of antennas in horizontal or vertical dimension
-            phases (int): the amount of available phases
+            codes : the amount of codes
+            antennas : the amount of antennas in horizontal or vertical dimension
+            phases : the amount of available phases
         """
         self.codes = codes
         self.antennas = antennas
         self.phases = phases
         self.scaled = False
 
-    def _element(self, code_num, antenna_num):
+    def _element(self, code_num: int, antenna_num: int):
         """get the (code_num, antenna_num) element's value."""
         temp1 = (code_num+self.codes/2) % self.codes
         temp2 = math.floor(antenna_num*temp1/(self.codes/self.phases))
@@ -87,10 +85,69 @@ class ReplayBuffer():
         self.size = min(self.size+1, self.max_size)
         self.ptr = (self.ptr+1) % self.max_size
 
-    def sampleBatch(self, batch_size=64):
+    def sampleBatch(self, batch_size: int=64) -> dict: 
+        """Uniformly sample from buffer.
+
+        Returns:
+            batch of transitions.
+        """
         idxs = np.random.randint(0, self.size, size=batch_size)
         batch = dict(obs=self.obs_buf[idxs],
                      next_obs=self.obs2_buf[idxs],
                      act=self.act_buf[idxs],
                      rew=self.rew_buf[idxs])
-        return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in batch.items()}
+        return batch
+
+class OUStrategy():
+    """This strategy implements the Ornstein-Uhlenbeck process, which adds time-correlated 
+    noise to the actions taken by the deterministic policy. The OU process satisfies the 
+    following stochastic differential equation:
+        dxt = theta*(mu - xt)*dt + sigma*dWt
+    where Wt denotes the Wiener process.
+
+        Reference 1: https://towardsdatascience.com/deep-deterministic-policy-gradients-explained-2d94655a9b7b
+        Reference 2: https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process
+        Reference 3: https://github.com/vitchyr/rlkit/blob/master/rlkit/exploration_strategies/ou_strategy.py
+    """
+
+    def __init__(
+            self,
+            act_space: dict,
+            mu: float=0,
+            theta: float=0.15,
+            max_sigma: float=1,
+            min_sigma: float=None,
+            noise_bound: float=None,
+            decay_period: int=10000,
+    ):
+        """
+        Parameters:
+            act_space : keys are {'dim', 'low', 'high'}
+        """
+        self.act_space = act_space
+        self.mu = mu
+        self.theta = theta
+        self.sigma = max_sigma
+        self._max_sigma = max_sigma
+        self._min_sigma = min_sigma if min_sigma else max_sigma
+        self._decay_period = decay_period
+        self.noise_bound = noise_bound
+        self.reset()
+
+    def reset(self):
+        self.state = self.mu * np.ones(self.act_space['dim'], dtype=np.float32)
+
+    def evolveState(self):
+        x = self.state
+        dx = self.theta*(self.mu-x) + self.sigma*np.random.randn(*x.shape)
+        self.state = x + dx
+        return self.state
+
+    def getActFromRaw(self, raw_act, time_step: int):
+        ou_state = self.evolveState()
+        self.sigma = (
+            self._max_sigma
+            - (self._max_sigma - self._min_sigma)
+            * min(1.0, time_step*1.0/self._decay_period)
+        )
+        return np.clip(raw_act + ou_state, self.act_space['low'], self.act_space['high'])
