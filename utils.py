@@ -117,12 +117,15 @@ class OUStrategy():
             theta: float=0.15,
             max_sigma: float=1,
             min_sigma: float=None,
-            noise_bound: float=None,
+            noise_clip: float=None,
             decay_period: int=10000,
     ):
         """
         Parameters:
             act_space : keys are {'dim', 'low', 'high'}
+            max_sigma/min_sigma : stddev for Gaussian policy noise
+            noise_clip : limit for absolute value of policy noise
+            decay_period : time steps for stddev of noise decaying from max_sigma to min_sigma.
         """
         self.act_space = act_space
         self.mu = mu
@@ -131,7 +134,7 @@ class OUStrategy():
         self._max_sigma = max_sigma
         self._min_sigma = min_sigma if min_sigma else max_sigma
         self._decay_period = decay_period
-        self.noise_bound = noise_bound
+        self.noise_clip = noise_clip
         self.reset()
 
     def reset(self):
@@ -141,6 +144,8 @@ class OUStrategy():
         x = self.state
         dx = self.theta*(self.mu-x) + self.sigma*np.random.randn(*x.shape)
         self.state = x + dx
+        if self.noise_clip is not None:
+            self.state = np.clip(self.state, -self.noise_clip, self.noise_clip)
         return self.state
 
     def getActFromRaw(self, raw_act, time_step: int):
