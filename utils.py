@@ -52,7 +52,8 @@ class CodeBook():
         return self.book
 
     def scale(self):
-        """Rescale the codebook
+        """Rescale the codebook. When the codebook is used for ris,
+        must call this scale function first.
 
         Return:
             codebook: shape (self.codes, self.antennas)
@@ -64,6 +65,47 @@ class CodeBook():
         self.book = self.book * math.sqrt(self.antennas)
         self.scaled = True
         return self.book
+
+class Decoder():
+    """decode the action from policy to the real action to interact with environment."""
+
+    def __init__(self, env, bs_cbook, ris_azi_cbook, ris_ele_cbook, power_levels):
+        """
+        Parameters:
+            env (env.Environment): the cell-free network
+            bs_cbook (CodeBook): codebook of base station
+            ris_azi_cbook (CodeBook): codebook of ris in the azimuth dimension
+            ris_ele_cbook (CodeBook): codebook of ris in the elevation dimension
+            power_levels (tuple): choice of power
+        """
+        self.env = env
+        self.bs_cbook = bs_cbook
+        self.ris_azi_cbook = ris_azi_cbook
+        self.ris_ele_cbook = ris_ele_cbook
+        self.power_levels = power_levels
+        self.genMap()
+
+    def genMap(self):
+        """generate the map between the discretized value of action from policy
+        to the actual action to env.
+        """
+        bs_num, ris_num, _ = env.getCount()
+        self.bs_act_size = (len(self.power_levels) * self.bs_cbook.codes)**(bs_num)
+        self.ris_act_size = (self.ris_azi_cbook.codes * self.ris_ele_cbook.codes)**(ris_num)
+
+        single_bs_acts = np.array([[pw_id, cbook_id] for range(len(self.power_levels)) for range(self.bs_cbook.codes)])
+        single_ris_acts = np.array([[azi_id, ele_id] for range(self.ris_azi_cbook.codes) for range(self.ris_ele_cbook.codes)])
+        self.bs_map = 
+
+def decodeAct(action, env):
+    """
+    Parameters:
+        action (np.array): 1-D vector
+        env (Environment)
+
+    Returns:
+        real_actions:
+    """
 
 class ReplayBuffer():
     """An experience replay buffer.
