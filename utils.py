@@ -89,23 +89,53 @@ class Decoder():
         """generate the map between the discretized value of action from policy
         to the actual action to env.
         """
-        bs_num, ris_num, _ = env.getCount()
+        def combine(arr1, arr2):
+            """get all of possible combinations among two array instances along
+            the first dimension."""
+            res = []
+            for i1 in arr1:
+                for i2 in arr2:
+                    i1 = np.array([i1]) if np.isscalar(i1) else i1.reshape(-1)
+                    i2 = np.array([i2]) if np.isscalar(i2) else i2.reshape(-1)
+                    res.append(np.concatenate((i1, i2)))
+            res = np.stack(res, axis=0)
+            return res
+
+        def genIndexCombine(*sizes):
+            """
+            Parameters:
+                sizes (List(int))
+            
+            Returns:
+                res (np.array)
+            """
+            res = np.arange(sizes[0])
+            for i in range(1, len(sizes)):
+                res = combine(res, np.arange(sizes[i]))
+            return res
+
+        def genArrayCombine(*arrs):
+            """
+            Parameters:
+                arrs (List[np.array])
+
+            Returns:
+                res (np.array)
+            """
+            res = arrs[0]
+            for i in range(1, len(arrs)):
+                res = combine(res, arrs[i])
+            return res
+        
+        bs_num, ris_num, _ = self.env.getCount()
         self.bs_act_size = (len(self.power_levels) * self.bs_cbook.codes)**(bs_num)
         self.ris_act_size = (self.ris_azi_cbook.codes * self.ris_ele_cbook.codes)**(ris_num)
 
-        single_bs_acts = np.array([[pw_id, cbook_id] for range(len(self.power_levels)) for range(self.bs_cbook.codes)])
-        single_ris_acts = np.array([[azi_id, ele_id] for range(self.ris_azi_cbook.codes) for range(self.ris_ele_cbook.codes)])
-        self.bs_map = 
-
-def decodeAct(action, env):
-    """
-    Parameters:
-        action (np.array): 1-D vector
-        env (Environment)
-
-    Returns:
-        real_actions:
-    """
+        single_bs_act = genIndexCombine(len(self.power_levels), self.bs_cbook.codes)
+        single_ris_act = genIndexCombine(self.ris_azi_cbook.codes, self.ris_ele_cbook.codes)
+        self.bs_map = genArrayCombine([single_bs_act for i in range(bs_num)])
+        self.ris_map = genArrayCombine([single_ris_act for i in range(ris_num)])
+        return
 
 class ReplayBuffer():
     """An experience replay buffer.
