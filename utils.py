@@ -67,27 +67,43 @@ class CodeBook():
         return self.book
 
 class Decoder():
-    """decode the action from policy to the real action to interact with environment."""
+    """decode the action from policy to the real action to interact with cell-free environment."""
 
-    def __init__(self, env, bs_cbook, ris_azi_cbook, ris_ele_cbook, power_levels):
+    def __init__(self, env, act_low, act_high, bs_cbook, ris_azi_cbook, ris_ele_cbook, 
+        power_levels, sat_ratio=0.05):
         """
         Parameters:
             env (env.Environment): the cell-free network
+
+            act_low/act_high (float): the lowest/highest action value, assume these are the same for
+                each dimension
+
             bs_cbook (CodeBook): codebook of base station
+
             ris_azi_cbook (CodeBook): codebook of ris in the azimuth dimension
+
             ris_ele_cbook (CodeBook): codebook of ris in the elevation dimension
+
             power_levels (tuple): choice of power
+
+            sat_ratio (float): ratio of interval [act_low, act_high]. In case of the saturation problem
+                when use 'tanh' activation function, assign the first and the last ratio of action 
+                interval to one action respectively. 
         """
         self.env = env
+        self.act_low, self.act_high = act_low, act_high
         self.bs_cbook = bs_cbook
         self.ris_azi_cbook = ris_azi_cbook
         self.ris_ele_cbook = ris_ele_cbook
         self.power_levels = power_levels
-        self.genMap()
+        self.sat_ratio = sat_ratio
+        self._genMap()
 
-    def genMap(self):
+    def _genMap(self):
         """generate the map between the discretized value of action from policy
-        to the actual action to env.
+        to the actual action to env. The maps for a single object are:
+            base station action : power_level_id, bs_cbook_id
+            ris action : azi_cbook_id, ele_cbook_id
         """
         def combine(arr1, arr2):
             """get all of possible combinations among two array instances along
@@ -132,10 +148,55 @@ class Decoder():
         self.ris_act_size = (self.ris_azi_cbook.codes * self.ris_ele_cbook.codes)**(ris_num)
 
         single_bs_act = genIndexCombine(len(self.power_levels), self.bs_cbook.codes)
-        single_ris_act = genIndexCombine(self.ris_azi_cbook.codes, self.ris_ele_cbook.codes)
+        single_ris_act = genIndexCombine(self.ris_ele_cbook.codes, self.ris_azi_cbook.codes)
         self.bs_map = genArrayCombine([single_bs_act for i in range(bs_num)])
         self.ris_map = genArrayCombine([single_ris_act for i in range(ris_num)])
         return
+
+    def decode(self, action):
+        """
+        Parameters:
+            action (np.array): shape is (2,), the first dim is for base station, the second
+                dim is for ris.
+        
+        Returns:
+            bs_beam (np.array): shape is (bs_num, bs_atn)
+            ris_beam (np.array): shape is (ris_num, ris_atn, ris_atn), the last two dimension
+                is diagnal matrix
+        """
+        bs_num, ris_num, _ = self.env.getCount()
+        interval = self.act_high - self.act_low
+        # base station action
+        if action[0] < self.act_low+interval*self.sat_ratio:
+            bs_act_id = 0
+        elif action[0] > self.act_high-interval*self.sat_ratio:
+            bs_act_id = self.bs_act_size - 1
+        else:
+            spacing = (self.act_high-self.act_low)*(1-2*self.sat_ratio) / (self.bs_act_size-2)
+            bs_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // spacing + 1
+        # ris action
+        if action[0] < self.act_low+interval*self.sat_ratio:
+            ris_act_id = 0
+        elif action[0] > self.act_high-interval*self.sat_ratio:
+            ris_act_id = self.ris_act_size - 1
+        else:
+            spacing = (self.act_high-self.act_low)*(1-2*self.sat_ratio) / (self.ris_act_size-2)
+            ris_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // spacing + 1
+
+        bs_beam = np.zeros((bs_num, self.env.bs_atn), dtype=np.float32)
+        ris_beam = np.zeros((ris_num, math.prod(self.env.ris_atn)), dtype=np.float32)
+        for i in range(bs_num):
+            power = self.power_levels[self.bs_map[bs_act_id, i*2]]
+            bs_beam[i] = math.sqrt(power) * self.bs_cbook.book[self.bs_map[bs_act_id, i*2+1]]
+        for j in range(ris_num):
+            ris_beam[j] = np.kron(self.ris_ele_cbook.book[self.ris_map[ris_act_id, j*2]], 
+                                  self.ris_azi_cbook.book[self.ris_map[ris_act_id, j*2+1]])
+        ris_beam_expand = np.zeros(ris_beam.shape+ris_beam.shape[-1:], dtype=ris_beam.dtype)
+        diagonals = ris_beam_expand.diagonal(axis1=-2, axis2=-1)
+        diagonals.setflags(write=True)
+        diagonals[:] = ris_beam.copy()
+
+        return bs_beam, ris_beam_expand
 
 class ReplayBuffer():
     """An experience replay buffer.
