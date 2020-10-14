@@ -74,8 +74,9 @@ def getPolicyLoss(model, trans):
     
 
 def train(
-        epochs, steps_per_epoch, start_steps, update_after, update_every, policy_decay,
-        net_args, lr_act, lr_crt, sync_rate,
+        epochs=100, steps_per_epoch=10000, start_steps, update_after, update_every, policy_decay,
+        env_args, net_args, cbook_args, lr_act, lr_crt, sync_rate, act_scale=1., batch_size=64, 
+        noise, tgt_noise, noise_clip
 ):
     """Twin Delayed Deep Deterministic Policy training process.
 
@@ -98,7 +99,12 @@ def train(
 
         policy_decay (int): number of steps of updating Q network before updating policy net
 
-        net_args (dict): networks arguments
+        env_args (dict): environment's arguments
+
+        net_args (dict): network's arguments
+
+        cbook_args (dict): codebook's arguments. The keys contain: 'bs_codes', 'ris_codes',
+            'bs_phases', 'ris_azi_phases', 'ris_ele_phases'.
 
         lr_act (float): learning rate of policy network
 
@@ -106,4 +112,12 @@ def train(
 
         sync_rate (float): the synchronize ratio between target network parameters and main
             networks
+        
+        act_scale (float): scale factor to the output of policy.
+
+        batch_size (int): number of samples to learn from at each gradient descent update
+
+        noise (float): stddev of Gaussian noise added to action from policy network
+
+        tgt_noise (float): stddev 
     """
