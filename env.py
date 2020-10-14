@@ -230,7 +230,6 @@ if __name__=='__main__':
     # -------- csi & rate demo --------
     bs_num, ris_num, user_num = env.getCount()
     bs_cbook = CodeBook(10, env.bs_atn)
-    bs_cbook.generate()
     ris_azi_cbook = CodeBook(8, env.ris_atn[0], phases=4)
     ris_ele_cbook = CodeBook(8, env.ris_atn[1], phases=4)
     ris_azi_cbook.scale()
