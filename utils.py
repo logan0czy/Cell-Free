@@ -3,6 +3,8 @@ import random
 
 import numpy as np
 
+from env import Environment
+
 
 def combineShape(length, shape=None):
     """
@@ -29,6 +31,7 @@ class CodeBook():
         self.antennas = antennas
         self.phases = phases
         self.scaled = False
+        self._generate()
 
     def _element(self, code_num: int, antenna_num: int):
         """get the (code_num, antenna_num) element's value."""
@@ -37,19 +40,19 @@ class CodeBook():
         value = 1 / math.sqrt(self.antennas) * np.exp(1j*2*math.pi/self.phases*temp2)
         return value
     
-    def generate(self):
+    def _generate(self):
         """Generate the codebook of shape (self.codes, self.antennas)
 
         Return:
             codebook
         """
         if hasattr(self, 'book'):
-            return self.book
+            return
         book = [[self._element(code_num, antenna_num) for antenna_num in range(self.antennas)]
                 for code_num in range(self.codes)
             ]
         self.book = np.array(book)
-        return self.book
+        return
 
     def scale(self):
         """Rescale the codebook. When the codebook is used for ris,
@@ -60,8 +63,6 @@ class CodeBook():
         """
         if self.scaled:
             return self.book
-        if not hasattr(self, 'book'):
-            self.generate()
         self.book = self.book * math.sqrt(self.antennas)
         self.scaled = True
         return self.book
@@ -149,8 +150,8 @@ class Decoder():
 
         single_bs_act = genIndexCombine(len(self.power_levels), self.bs_cbook.codes)
         single_ris_act = genIndexCombine(self.ris_ele_cbook.codes, self.ris_azi_cbook.codes)
-        self.bs_map = genArrayCombine([single_bs_act for i in range(bs_num)])
-        self.ris_map = genArrayCombine([single_ris_act for i in range(ris_num)])
+        self.bs_map = genArrayCombine(*[single_bs_act for i in range(bs_num)])
+        self.ris_map = genArrayCombine(*[single_ris_act for i in range(ris_num)])
         return
 
     def decode(self, action):
@@ -174,6 +175,7 @@ class Decoder():
         else:
             spacing = (self.act_high-self.act_low)*(1-2*self.sat_ratio) / (self.bs_act_size-2)
             bs_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // spacing + 1
+            bs_act_id = int(bs_act_id)
         # ris action
         if action[0] < self.act_low+interval*self.sat_ratio:
             ris_act_id = 0
@@ -182,9 +184,10 @@ class Decoder():
         else:
             spacing = (self.act_high-self.act_low)*(1-2*self.sat_ratio) / (self.ris_act_size-2)
             ris_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // spacing + 1
+            ris_act_id = int(ris_act_id)
 
-        bs_beam = np.zeros((bs_num, self.env.bs_atn), dtype=np.float32)
-        ris_beam = np.zeros((ris_num, math.prod(self.env.ris_atn)), dtype=np.float32)
+        bs_beam = np.zeros((bs_num, self.env.bs_atn), dtype=np.complex64)
+        ris_beam = np.zeros((ris_num, math.prod(self.env.ris_atn)), dtype=np.complex64)
         for i in range(bs_num):
             power = self.power_levels[self.bs_map[bs_act_id, i*2]]
             bs_beam[i] = math.sqrt(power) * self.bs_cbook.book[self.bs_map[bs_act_id, i*2+1]]
@@ -292,3 +295,16 @@ class OUStrategy():
             * min(1.0, time_step*1.0/self._decay_period)
         )
         return np.clip(raw_act + ou_state, self.act_space['low'], self.act_space['high'])
+
+if __name__=='__main__':
+    env = Environment(30)
+    bs_cbook = CodeBook(10, env.bs_atn)
+    ris_ele_cbook, ris_azi_cbook = CodeBook(8, env.ris_atn[1], phases=4), CodeBook(8, env.ris_atn[0], phases=4)
+    ris_ele_cbook.scale()
+    ris_azi_cbook.scale()
+
+    transer = Decoder(env, -1, 1, bs_cbook, ris_azi_cbook, ris_ele_cbook, 
+                      [env.max_power*i for i in range(1, 5)])
+    bs_beam, ris_beam = transer.decode(np.array([0.3, -0.5]))
+    print(f"bs_beam, shape{bs_beam.shape}\n{bs_beam}")
+    print(f"ris_beam, shape{ris_beam.shape}\n{ris_beam}")
