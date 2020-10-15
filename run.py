@@ -7,6 +7,7 @@ Reference: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch
 
 import time
 import math
+from copy import deepcopy
 # from IPython.display import clear_output
 
 from tqdm import tqdm
@@ -74,13 +75,34 @@ def getPolicyLoss(model, trans):
     
 
 def train(
-        epochs=100, steps_per_epoch=10000, start_steps, update_after, update_every, policy_decay,
-        env_args, net_args, cbook_args, lr_act, lr_crt, sync_rate, act_scale=1., batch_size=64, 
-        noise, tgt_noise, noise_clip
+        env_kwargs, net_kwargs, cbook_kwargs, noise, tgt_noise, noise_clip, epochs=100,
+        steps_per_epoch=10000, start_steps=10000, update_after=1000, update_every=50,
+        policy_decay=2, lr_act=1e-3, lr_crt=1e-3, sync_rate=0.005, act_scale=1., batch_size=64
 ):
     """Twin Delayed Deep Deterministic Policy training process.
 
     Parameters:
+        env_kwargs (dict): environment's arguments, keys:
+
+            'max_power', 'bs_atn', 'ris_atn'
+
+        net_kwargs (dict): network's arguments, keys:
+
+            'critic_hidden_sizes', 'actor_hidden_sizes', 'act_limit'
+
+        cbook_kwargs (dict): codebook's arguments. keys: 
+
+            'bs_codes', 'ris_codes', 'bs_phases', 'ris_azi_phases', 'ris_ele_phases'
+
+        noise (float): ratio of stddev of Gaussian noise to the interval corresponding to
+            the same action. The noise is added to action from policy network
+
+        tgt_noise (float): ratio of stddev of Gaussian smoothing noise to the interval
+            corresponding to the same action.
+
+        noise_clip (float): ratio for the absolute value limitaion of smoothing noise to
+            the interval corresponding to the same action.
+
         epochs (int): number of epochs to run and train agent
 
         steps_per_epoch (int): number of steps of interaction (state-action pairs)
@@ -99,25 +121,23 @@ def train(
 
         policy_decay (int): number of steps of updating Q network before updating policy net
 
-        env_args (dict): environment's arguments
-
-        net_args (dict): network's arguments
-
-        cbook_args (dict): codebook's arguments. The keys contain: 'bs_codes', 'ris_codes',
-            'bs_phases', 'ris_azi_phases', 'ris_ele_phases'.
-
         lr_act (float): learning rate of policy network
 
         lr_crt (float): learning rate of Q network
 
         sync_rate (float): the synchronize ratio between target network parameters and main
-            networks
+            networks. Equation is:
+
+            tgt_param := sync_rate*src_param + (1-sync_rate)*tgt_param 
         
         act_scale (float): scale factor to the output of policy.
 
         batch_size (int): number of samples to learn from at each gradient descent update
-
-        noise (float): stddev of Gaussian noise added to action from policy network
-
-        tgt_noise (float): stddev 
     """
+    env = Environment(**env_kwargs)
+    bs_cbook = utils.CodeBook(cbook_kwargs['bs_codes'], env.bs_atn, cbook_kwargs['bs_phases'])
+    ris_ele_cbook = utils.CodeBook(cbook_kwargs['ris_ele_codes'], env.ris_atn[1], cbook_kwargs['ris_ele_phases'])
+    ris_azi_cbook = utils.CodeBook(cbook_kwargs['ris_azi_codes'], env.ris_atn[0], cbook_kwargs['ris_azi_phases'])
+
+    model = ActorCritic(env.obs_dim, 2, **net_kwargs)
+    tgt_model = deepcopy(model)
