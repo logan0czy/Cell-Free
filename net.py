@@ -60,7 +60,10 @@ class ActorCritic(nn.Module):
         return next(self.parameters()).device
 
     def act(self, obs):
-        # Get action w.r.t the observations
+        # Get action w.r.t the observations using current parameters
+        self.train(False)
         with torch.no_grad():
             actions = self.actor(obs)
+
+        self.train(True)
         return actions
