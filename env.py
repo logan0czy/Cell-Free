@@ -54,8 +54,8 @@ class Environment():
             base station and RIS are at the same height,
             near field distance is 1m
         """
-        self.genLoc()
-        self.genAngle()
+        self._genLoc()
+        self._genAngle()
         self.bs_atn = bs_atn
         self.ris_atn = ris_atn
         self.max_power = 10**(max_power/10)
@@ -71,7 +71,7 @@ class Environment():
                         + ris_num*user_num*2*math.prod(self.ris_atn) \
                         + bs_num*user_num*2*self.bs_atn
     
-    def genLoc(self, radius: int=50, height: int=5):
+    def _genLoc(self, radius: int=50, height: int=5):
         """generate the location of base stations, RISs and users
 
         Parameters:
@@ -95,7 +95,7 @@ class Environment():
             ptr += 1
         return
     
-    def genAngle(self):
+    def _genAngle(self):
         """generate the mutual azimuth & elevation angle among bs, RIS and users.
 
         the meanings of variable suffix are:
@@ -133,12 +133,8 @@ class Environment():
                 theta_azi, _ = angle(self.user_loc[i], self.bs_loc[j], self.bs_loc_delta[j])
                 self.user2bs_azi[i, j] = theta_azi
         return
-        
-    def getCount(self):
-        """get the number of base stations, RIS and users"""
-        return len(self.bs_loc), len(self.ris_loc), len(self.user_loc)
 
-    def getCSI(self):
+    def _changeCSI(self):
         """get the channel state information at current time step
         
         Return:
@@ -191,23 +187,46 @@ class Environment():
         self.ris2user_csi = self.ris2user_csi*self.rho + math.sqrt(1-self.rho**2)*ris2user_csi if hasattr(self, 'ris2user_csi') else ris2user_csi
         return self.bs2user_csi, self.bs2ris_csi, self.ris2user_csi
 
-    def getRate(self, bs2user_csi, bs2ris_csi, ris2user_csi, bs_beam, ris_beam):
+    def _getRate(self, bs_beam, ris_beam):
         """calculate total transmission rate.
         Parameters:
-            bs2user_csi : (bs_num, user_num, bs_atn)
-            bs2ris_csi : (bs_num, ris_num, ris_atn, bs_atn)
-            ris2user_csi : (ris_num, user_num, ris_atn)
             bs_beam : (bs_num, bs_atn)
             ris_beam : (ris_num, ris_atn, ris_atn), the last two dimension is diagnal matrix
         """
         _, _, user_num = self.getCount()
         rate = 0
         for user_id in range(user_num):
-            temp1 = np.sum((ris2user_csi[np.newaxis, :, np.newaxis, user_id] @ ris_beam[np.newaxis, :] @ bs2ris_csi).squeeze(2), 
+            temp1 = np.sum((self.ris2user_csi[np.newaxis, :, np.newaxis, user_id] @ ris_beam[np.newaxis, :] @ self.bs2ris_csi).squeeze(2), 
                             axis=1, keepdims=True)
-            signal_power = abs(np.sum(((bs2user_csi[:, [user_id]] + temp1) @ bs_beam[:, :, np.newaxis]).squeeze()))**2
+            signal_power = abs(np.sum(((self.bs2user_csi[:, [user_id]] + temp1) @ bs_beam[:, :, np.newaxis]).squeeze()))**2
             rate = np.log2(1 + signal_power / ((user_num-1)*signal_power+user_num*self.noise))
         return rate
+
+    def _csi2state(self):
+        obs = np.concatenate((np.real(self.bs2user_csi).reshape(-1), np.imag(self.bs2user_csi).reshape(-1),
+                              np.real(self.bs2ris_csi).reshape(-1), np.imag(self.bs2ris_csi).reshape(-1),
+                              np.real(self.ris2user_csi).reshape(-1), np.imag(self.ris2user_csi).reshape(-1)))
+        return obs
+
+    def getCount(self):
+        """get the number of base stations, RIS and users"""
+        return len(self.bs_loc), len(self.ris_loc), len(self.user_loc)
+
+    def reset(self, seed):
+        np.random.seed(seed)
+        try:
+            del self.bs2user_csi, self.bs2ris_csi, self.ris2user_csi
+        except AttributeError:
+            pass
+        self._changeCSI()
+        return self._csi2state()
+        
+    def step(self, bs_beam, ris_beam):
+        """let the state of environment move forward"""
+        rew = self._getRate(bs_beam, ris_beam)
+        self._changeCSI()
+        next_obs = self._csi2state()
+        return next_obs, rew
 
 if __name__=='__main__':
     from utils import CodeBook
@@ -215,6 +234,8 @@ if __name__=='__main__':
     sns.set()
 
     env = Environment(30)
+    env.reset(2020)
+
     # -------- show locations --------
     plt.figure(figsize=(8, 8))
     ax = plt.subplot(111, projection='3d')
@@ -250,6 +271,8 @@ if __name__=='__main__':
     diagonals[:] = ris_beam.copy()
     
     print("demo achievable rate")
-    print(env.getRate(*env.getCSI(), bs_beam, ris_beam_expand))
+    _, rew = env.step(bs_beam, ris_beam_expand)
+    _, rew2 = env.step(bs_beam, ris_beam_expand)
+    print(f"rate 1: {rew}\nrate 2: {rew2}")
 
     plt.show()
