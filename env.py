@@ -67,9 +67,9 @@ class Environment():
         self.rho = 0.64  # channel state transition proportion
 
         bs_num, ris_num, user_num = self.getCount()
-        self.state_size = bs_num*ris_num*2*math.prod(self.ris_atn)*self.bs_atn \
-                          + ris_num*user_num*2*math.prod(self.ris_atn) \
-                          + bs_num*user_num*2*self.bs_atn
+        self.obs_dim = bs_num*ris_num*2*math.prod(self.ris_atn)*self.bs_atn \
+                        + ris_num*user_num*2*math.prod(self.ris_atn) \
+                        + bs_num*user_num*2*self.bs_atn
     
     def genLoc(self, radius: int=50, height: int=5):
         """generate the location of base stations, RISs and users
