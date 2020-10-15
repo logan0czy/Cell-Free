@@ -260,10 +260,13 @@ class OUStrategy():
         Parameters:
             act_space : keys are {'dim', 'low', 'high'}, the 'low' & 'high' must be np.array
                 with the same dim to action
+
             max_sigma/min_sigma (np.array): stddevs for Gaussian policy noise, and each dim
                 maybe different
+
             noise_clip (np.array): limit for absolute value of policy noise, each dim maybe
                 different
+                
             decay_period : time steps for stddev of noise decaying from max_sigma to min_sigma.
         """
         self.act_space = act_space
