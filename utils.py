@@ -100,6 +100,10 @@ class Decoder():
         self.sat_ratio = sat_ratio
         self._genMap()
 
+        # calculate absolute values of interval corresponding to the same action
+        self.spacing = ((self.act_high-self.act_low)*(1-2*self.sat_ratio) / (self.bs_act_size-2),
+                        (self.act_high-self.act_low)*(1-2*self.sat_ratio) / (self.ris_act_size-2))
+
     def _genMap(self):
         """generate the map between the discretized value of action from policy
         to the actual action to env. The maps for a single object are:
@@ -173,8 +177,7 @@ class Decoder():
         elif action[0] > self.act_high-interval*self.sat_ratio:
             bs_act_id = self.bs_act_size - 1
         else:
-            spacing = (self.act_high-self.act_low)*(1-2*self.sat_ratio) / (self.bs_act_size-2)
-            bs_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // spacing + 1
+            bs_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // self.spacing[0] + 1
             bs_act_id = int(bs_act_id)
         # ris action
         if action[0] < self.act_low+interval*self.sat_ratio:
@@ -182,8 +185,7 @@ class Decoder():
         elif action[0] > self.act_high-interval*self.sat_ratio:
             ris_act_id = self.ris_act_size - 1
         else:
-            spacing = (self.act_high-self.act_low)*(1-2*self.sat_ratio) / (self.ris_act_size-2)
-            ris_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // spacing + 1
+            ris_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // self.spacing[1] + 1
             ris_act_id = int(ris_act_id)
 
         bs_beam = np.zeros((bs_num, self.env.bs_atn), dtype=np.complex64)
