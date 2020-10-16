@@ -167,8 +167,8 @@ def train(
         return q_loss.item()
 
     def getAct(obs):
-        action = main_model.act(torch.as_tensor(obs, dtype=torch.float32, device=main_model.device))
-        action = act_ous.getActFromRaw(action.cpu())
+        action = main_model.act(torch.as_tensor([obs], dtype=torch.float32, device=main_model.device))
+        action = act_ous.getActFromRaw(action.unsqueeze(0).cpu())
         return action
 
     np.random.seed(seed)
