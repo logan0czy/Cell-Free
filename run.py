@@ -146,7 +146,7 @@ def train(
             data (dict): include batches of state transitions and the reward,
                 keys are {'obs', 'next_obs', 'act', 'rew'}
         """
-        data = {k: torch.as_tensor(v, dtype=torch.float64, device=main_model.device) 
+        data = {k: torch.as_tensor(v, dtype=torch.float32, device=main_model.device) 
                  for k, v in data.items()}
 
         q_opt.zero_grad()
@@ -194,10 +194,10 @@ def train(
 
     # exploration noise
     act_ous = utils.OUStrategy(act_space={'dim': 2, 'low': -1*net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
-                               max_sigma=np.array([act_noise*transfer.spacing[0], act_noise*transfer.spacing[1]]))
+                               max_sigma=np.array([act_noise*transfer.spacing[0], act_noise*transfer.spacing[1]], dtype=np.float32))
     tgt_ous = utils.OUStrategy(act_space={'dim': 2, 'low': -1*net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
-                               max_sigma=np.array([tgt_noise*transfer.spacing[0], tgt_noise*transfer.spacing[1]]),
-                               noise_clip=np.array([noise_clip*transfer.spacing[0], noise_clip*transfer.spacing[1]]))
+                               max_sigma=np.array([tgt_noise*transfer.spacing[0], tgt_noise*transfer.spacing[1]], dtype=np.float32),
+                               noise_clip=np.array([noise_clip*transfer.spacing[0], noise_clip*transfer.spacing[1]], dtype=np.float32))
 
     # list of parameters for both Q networks
     q_params = itertools.chain(main_model.q1.parameters(), main_model.q2.parameters())

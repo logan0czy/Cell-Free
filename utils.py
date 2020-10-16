@@ -286,7 +286,7 @@ class OUStrategy():
 
     def evolveState(self):
         x = self.state
-        dx = self.theta*(self.mu-x) + self.sigma*np.random.randn(*x.shape)
+        dx = self.theta*(self.mu-x) + self.sigma*np.random.randn(*x.shape, ).astype(np.float32)
         self.state = x + dx
         if self.noise_clip is not None:
             self.state = np.clip(self.state, -self.noise_clip, self.noise_clip)
