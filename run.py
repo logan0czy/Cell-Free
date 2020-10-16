@@ -234,7 +234,7 @@ def train(
                 batch = replay_buffer.sampleBatch(batch_size)
                 loss = update(batch, j)
 
-                if len(loss)>1:
+                if not np.isscalar(loss):
                     loss_info[0].append(loss[0])
                     loss_info[1].append(loss[1])
                 else:
