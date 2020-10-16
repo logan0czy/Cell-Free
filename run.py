@@ -146,7 +146,7 @@ def train(
             data (dict): include batches of state transitions and the reward,
                 keys are {'obs', 'next_obs', 'act', 'rew'}
         """
-        data = {k: torch.as_tensor(v, dtype=torch.float32, device=main_model.device) 
+        data = {k: torch.as_tensor(v, dtype=torch.float64, device=main_model.device) 
                  for k, v in data.items()}
 
         q_opt.zero_grad()
@@ -176,8 +176,8 @@ def train(
 
     # beamforming codebook
     bs_cbook = utils.CodeBook(cbook_kwargs['bs_codes'], env.bs_atn, cbook_kwargs['bs_phases'])
-    ris_ele_cbook = utils.CodeBook(cbook_kwargs['ris_ele_codes'], env.ris_atn[1], cbook_kwargs['ris_ele_phases'])
-    ris_azi_cbook = utils.CodeBook(cbook_kwargs['ris_azi_codes'], env.ris_atn[0], cbook_kwargs['ris_azi_phases'])
+    ris_ele_cbook = utils.CodeBook(cbook_kwargs['ris_codes'], env.ris_atn[1], cbook_kwargs['ris_ele_phases'])
+    ris_azi_cbook = utils.CodeBook(cbook_kwargs['ris_codes'], env.ris_atn[0], cbook_kwargs['ris_azi_phases'])
 
     # action decoder
     transfer = utils.Decoder(env, -net_kwargs['act_limit'], net_kwargs['act_limit'], bs_cbook,
@@ -212,6 +212,7 @@ def train(
     # training process
     total_steps = epochs * steps_per_epoch
     obs = env.reset(seed)
+    ep_rew = 0
     for step in range(total_steps):
         if step < start_steps:
             act = net_kwargs['act_limit'] * np.random.uniform(-1, 1, 2)
@@ -219,6 +220,7 @@ def train(
             act = getAct(obs)
         bs_beam, ris_beam = transfer.decode(act)
         next_obs, rew = env.step(bs_beam, ris_beam)
+        ep_rew += rew
 
         replay_buffer.store(obs, act, rew, next_obs)
 
@@ -234,5 +236,15 @@ def train(
             act_ous.reset()
             tgt_ous.reset()
 
-        
+            print(f"epoch: {(step+1)//steps_per_epoch}, avg_rew: {ep_rew/steps_per_epoch}")
 
+if __name__=='__main__':
+    env_kwargs = {'max_power': 30, 'bs_atn': 4, 'ris_atn': (8, 4)}
+    net_kwargs = {'critic_hidden_sizes': [1024, 512, 256], 
+                  'actor_hidden_sizes': [1024, 512, 256],
+                  'act_limit': 1}
+    cbook_kwargs = {'bs_codes': 10, 'ris_codes': 8, 
+                    'bs_phases': 8,
+                    'ris_azi_phases': 4,
+                    'ris_ele_phases': 4}
+    train(env_kwargs, net_kwargs, cbook_kwargs, act_noise=2, tgt_noise=0, noise_clip=0)
