@@ -67,8 +67,8 @@ class Environment():
         self.rho = 0.64  # channel state transition proportion
 
         bs_num, ris_num, user_num = self.getCount()
-        self.obs_dim = bs_num*ris_num*2*math.prod(self.ris_atn)*self.bs_atn \
-                        + ris_num*user_num*2*math.prod(self.ris_atn) \
+        self.obs_dim = bs_num*ris_num*2*np.prod(self.ris_atn)*self.bs_atn \
+                        + ris_num*user_num*2*np.prod(self.ris_atn) \
                         + bs_num*user_num*2*self.bs_atn
     
     def _genLoc(self, radius: int=50, height: int=5):
@@ -144,7 +144,7 @@ class Environment():
         """
         bs_num, ris_num, user_num = self.getCount()
         if not hasattr(self, 'bs2ris_csi'):
-            self.bs2ris_csi = np.zeros((bs_num, ris_num, math.prod(self.ris_atn), self.bs_atn), dtype=np.complex64) 
+            self.bs2ris_csi = np.zeros((bs_num, ris_num, np.prod(self.ris_atn), self.bs_atn), dtype=np.complex64) 
             for i in range(bs_num):
                 for j in range(ris_num):
                     pl = self.pl0 / np.linalg.norm(self.bs_loc[i]-self.ris_loc[j])**self.pl_exp[0]
@@ -167,18 +167,18 @@ class Environment():
                                         for i in range(self.paths)])
                 bs2user_csi[i, j] = math.sqrt(pl/self.paths) * np.sum(factor[:, np.newaxis]*bs_arr_resp_azi, axis=0)
 
-        ris2user_csi = np.zeros((ris_num, user_num, math.prod(self.ris_atn)), dtype=np.complex64)
+        ris2user_csi = np.zeros((ris_num, user_num, np.prod(self.ris_atn)), dtype=np.complex64)
         for i in range(ris_num):
             for j in range(user_num):
                 pl = self.pl0 / np.linalg.norm(self.ris_loc[i]-self.user_loc[j])**self.pl_exp[1]
                 theta_azi = self.user2ris_azi[j, i]
                 theta_ele = self.user2ris_ele[j, i]
                 factor = np.exp(1j*np.random.uniform(-math.pi, math.pi, self.paths))
-                ris_arr_resp = np.zeros((self.paths, math.prod(self.ris_atn)), dtype=np.complex64)
+                ris_arr_resp = np.zeros((self.paths, np.prod(self.ris_atn)), dtype=np.complex64)
                 for path_id in range(self.paths):
                     theta_azi_l = np.random.uniform(theta_azi-self.angle_spread, theta_azi+self.angle_spread)
                     theta_ele_l = np.random.uniform(theta_ele-self.angle_spread, theta_ele+self.angle_spread)
-                    ris_arr_resp[path_id] = math.sqrt(1/math.prod(self.ris_atn)) \
+                    ris_arr_resp[path_id] = math.sqrt(1/np.prod(self.ris_atn)) \
                                             * np.kron(np.exp(1j*math.pi*np.arange(self.ris_atn[1])*math.sin(theta_ele_l)), 
                                                       np.exp(1j*math.pi*np.arange(self.ris_atn[0])*math.cos(theta_azi_l)*math.cos(theta_ele_l)))
                 ris2user_csi[i, j] = math.sqrt(pl/self.paths) * np.sum(factor[:, np.newaxis]*ris_arr_resp, axis=0)
@@ -261,7 +261,7 @@ if __name__=='__main__':
         bs_beam[i] = bs_cbook.book[np.random.randint(bs_cbook.codes)]
     bs_beam = math.sqrt(env.max_power) * bs_beam
     # ris beamforming
-    ris_beam = np.zeros((ris_num, math.prod(env.ris_atn)), dtype=np.complex64)
+    ris_beam = np.zeros((ris_num, np.prod(env.ris_atn)), dtype=np.complex64)
     for i in range(ris_num):
         ris_beam[i] = np.kron(ris_ele_cbook.book[np.random.randint(ris_ele_cbook.codes)], 
                               ris_azi_cbook.book[np.random.randint(ris_azi_cbook.codes)])
