@@ -240,7 +240,7 @@ def train(
                 else:
                     loss_info[0].append(loss)
 
-            if step%1000==0:
+            if (step+1)%1000==0:
                 print(f"epoch: {(step+1)//steps_per_epoch}, loss_q: {np.mean(loss_info[0]):.4f}, loss_policy: {np.mean(loss_info[1]):.4f}")
 
         if (step+1) % steps_per_epoch == 0:
