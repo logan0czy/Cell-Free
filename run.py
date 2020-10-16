@@ -161,8 +161,10 @@ def train(
             policy_opt.step()
 
             sync(main_model, tgt_model, sync_rate)
+            
+            return q_loss.item(), policy_loss.item()
 
-        return
+        return q_loss.item()
 
     def getAct(obs):
         action = main_model.act(torch.as_tensor(obs, dtype=torch.float32, device=main_model.device))
@@ -227,9 +229,19 @@ def train(
         obs = next_obs
 
         if (step+1) > update_after and (step+1-update_after)%update_every==0:
+            loss_info = [[], []]
             for j in range(update_every):
                 batch = replay_buffer.sampleBatch(batch_size)
-                update(batch, j)
+                loss = update(batch, j)
+
+                if len(loss)>1:
+                    loss_info[0].append(loss[0])
+                    loss_info[1].append(loss[1])
+                else:
+                    loss_info[0].append(loss)
+
+            print(f"epoch: {(step+1)//steps_per_epoch}, avg rew: {ep_rew/((steps+1)%steps_per_epoch)}, \
+                loss_q: {np.mean(loss_info[0])}, loss_policy: {np.mean(loss_info[1])}")
 
         if (step+1) % steps_per_epoch == 0:
             obs = env.reset(seed)
