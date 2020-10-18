@@ -199,7 +199,7 @@ class Environment():
             temp1 = np.sum((self.ris2user_csi[np.newaxis, :, np.newaxis, user_id] @ ris_beam[np.newaxis, :] @ self.bs2ris_csi).squeeze(2), 
                             axis=1, keepdims=True)
             signal_power = abs(np.sum(((self.bs2user_csi[:, [user_id]] + temp1) @ bs_beam[:, :, np.newaxis]).squeeze()))**2
-            rate = np.log2(1 + signal_power / ((user_num-1)*signal_power+user_num*self.noise))
+            rate += np.log2(1 + signal_power / ((user_num-1)*signal_power+user_num*self.noise))
         return rate
 
     def _csi2state(self):
