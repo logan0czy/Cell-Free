@@ -241,14 +241,14 @@ def train(
                     loss_info[0].append(loss)
 
             if (step+1)%1000==0:
-                print(f"epoch: {(step+1)//steps_per_epoch}, loss_q: {np.mean(loss_info[0]):.4f}, loss_policy: {np.mean(loss_info[1]):.4f}")
+                print(f"epoch: {step//steps_per_epoch}, steps: {step}, loss_q: {np.mean(loss_info[0]):.4f}, loss_policy: {np.mean(loss_info[1]):.4f}")
 
         if (step+1) % steps_per_epoch == 0:
             obs = env.reset(seed)
             act_ous.reset()
             tgt_ous.reset()
 
-            print(f"\nepoch: {(step+1)//steps_per_epoch}, avg_rew: {ep_rew/steps_per_epoch:.4f}\n")
+            print(f"\nepoch: {step//steps_per_epoch}, avg_rew: {ep_rew/steps_per_epoch:.4f}\n")
 
 if __name__=='__main__':
     env_kwargs = {'max_power': 30, 'bs_atn': 4, 'ris_atn': (8, 4)}
