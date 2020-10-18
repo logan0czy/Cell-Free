@@ -168,7 +168,7 @@ def train(
 
     def getAct(obs):
         action = main_model.act(torch.as_tensor([obs], dtype=torch.float32, device=main_model.device))
-        action = act_ous.getActFromRaw(action.unsqueeze(0).cpu())
+        action = act_ous.getActFromRaw(action.squeeze(0).cpu())
         return action
 
     np.random.seed(seed)
@@ -217,7 +217,7 @@ def train(
     ep_rew = 0
     for step in range(total_steps):
         if step < start_steps:
-            act = net_kwargs['act_limit'] * np.random.uniform(-1, 1, 2)
+            act = net_kwargs['act_limit'] * np.random.uniform(-1, 1, 2).astype(np.float32)
         else:
             act = getAct(obs)
         bs_beam, ris_beam = transfer.decode(act)
