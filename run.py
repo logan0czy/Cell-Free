@@ -177,15 +177,20 @@ def train(
     torch.manual_seed(seed)
 
     env = Environment(**env_kwargs)
+    print("env created...")
 
     # beamforming codebook
     bs_cbook = utils.CodeBook(cbook_kwargs['bs_codes'], env.bs_atn, cbook_kwargs['bs_phases'])
     ris_ele_cbook = utils.CodeBook(cbook_kwargs['ris_codes'], env.ris_atn[1], cbook_kwargs['ris_ele_phases'])
     ris_azi_cbook = utils.CodeBook(cbook_kwargs['ris_codes'], env.ris_atn[0], cbook_kwargs['ris_azi_phases'])
+    ris_ele_cbook.scale()
+    ris_azi_cbook.scale()
+    print("codebook created...")
 
     # action decoder
     transfer = utils.Decoder(env, -net_kwargs['act_limit'], net_kwargs['act_limit'], bs_cbook,
                             ris_azi_cbook, ris_ele_cbook, [(i+1)*env.max_power/n_powers for i in range(n_powers)])
+    print("decoder created...")
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     main_model = ActorCritic(env.obs_dim, 2, **net_kwargs)
@@ -195,6 +200,7 @@ def train(
     tgt_model.train(False)
     for param in tgt_model.parameters():
         param.requires_grad = False
+    print("models created...")
 
     # exploration noise
     act_ous = utils.OUStrategy(act_space={'dim': 2, 'low': -1*net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
@@ -202,6 +208,7 @@ def train(
     tgt_ous = utils.OUStrategy(act_space={'dim': 2, 'low': -1*net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
                                max_sigma=np.array([tgt_noise*transfer.spacing[0], tgt_noise*transfer.spacing[1]], dtype=np.float32),
                                noise_clip=np.array([noise_clip*transfer.spacing[0], noise_clip*transfer.spacing[1]], dtype=np.float32))
+    print("noises created...")
 
     # list of parameters for both Q networks
     q_params = itertools.chain(main_model.q1.parameters(), main_model.q2.parameters())
@@ -212,6 +219,7 @@ def train(
 
     # experience buffer
     replay_buffer = utils.ReplayBuffer(env.obs_dim, 2, buffer_size)
+    print("replay buffer created...")
 
     # training process
     total_steps = epochs * steps_per_epoch
