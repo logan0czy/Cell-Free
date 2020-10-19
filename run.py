@@ -284,6 +284,8 @@ def train(
                 speed: {timeCount(time.time(), ep_time)[1]/steps_per_epoch:.2f}\n")
             ep_time = time.time()
 
+            torch.save(main_model.state_dict(), "./checkpoint/infer_model.pth")
+
 if __name__=='__main__':
     env_kwargs = {'max_power': 30, 'bs_atn': 4, 'ris_atn': (8, 4)}
     net_kwargs = {'critic_hidden_sizes': [1024, 512, 256], 
