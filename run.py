@@ -170,7 +170,7 @@ def train(
 
     def getAct(obs):
         action = main_model.act(torch.as_tensor([obs], dtype=torch.float32, device=main_model.device))
-        action = act_ous.getActFromRaw(action.squeeze(0).cpu())
+        action = act_ous.getActFromRaw(action.squeeze(0).cpu().numpy().copy())
         return action
 
     np.random.seed(seed)
