@@ -246,6 +246,7 @@ def train(
                 print(f"epoch: {step//steps_per_epoch}, steps: {step}, loss_q: {np.mean(loss_info[0]):.4f}, loss_policy: {np.mean(loss_info[1]):.4f}")
 
         if (step+1) % steps_per_epoch == 0:
+            torch.cuda.empty_cache()
             obs = env.reset(seed)
             act_ous.reset()
             tgt_ous.reset()
