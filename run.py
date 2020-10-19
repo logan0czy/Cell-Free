@@ -174,12 +174,14 @@ def train(
         q_opt.zero_grad()
         q_loss = getQLoss(data)
         q_loss.backward()
+        nn.utils.clip_grad_norm_(q_params, 10)
         q_opt.step()
 
         if timer%policy_decay == 0:
             policy_opt.zero_grad()
             policy_loss = getPolicyLoss(data)
             policy_loss.backward()
+            nn.utils.clip_grad_norm_(main_model.actor.parameters(), 10)
             policy_opt.step()
 
             sync(main_model, tgt_model, sync_rate)
