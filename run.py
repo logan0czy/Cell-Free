@@ -8,6 +8,7 @@ Reference: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch
 import time
 import math
 import itertools
+import gc
 from copy import deepcopy
 # from IPython.display import clear_output
 
@@ -275,7 +276,6 @@ def train(
                     loss_policy: {np.mean(loss_info[1]):.4f}, time elapse: {timeCount(time.time(), start_time)[0]}")
 
         if (step+1) % steps_per_epoch == 0:
-            torch.cuda.empty_cache()
             obs = env.reset(seed)
             act_ous.reset()
             tgt_ous.reset()
@@ -283,8 +283,11 @@ def train(
             print(f"\nepoch: {step//steps_per_epoch}, avg_rew: {ep_rew/steps_per_epoch:.4f}, \
                 speed: {timeCount(time.time(), ep_time)[1]/steps_per_epoch:.2f}\n")
             ep_time = time.time()
+            ep_rew = 0
 
             torch.save(main_model.state_dict(), "./checkpoint/infer_model.pth")
+            torch.cuda.empty_cache()
+            gc.collect()
 
 if __name__=='__main__':
     env_kwargs = {'max_power': 30, 'bs_atn': 4, 'ris_atn': (8, 4)}
