@@ -24,8 +24,8 @@ import utils
 def train(
         env_kwargs, net_kwargs, cbook_kwargs, act_noise, tgt_noise, noise_clip, epochs=100,
         steps_per_epoch=10000, start_steps=10000, update_after=1000, update_every=50,
-        policy_decay=2, lr_policy=1e-3, lr_q=1e-3, sync_rate=0.005, n_powers=4, gamma=0.6,
-        batch_size=64, buffer_size=100000, seed=24
+        policy_decay=2, lr_policy=1e-3, lr_q=1e-3, q_weight_decay=1e-4, sync_rate=0.005, 
+        n_powers=4, gamma=0.6, batch_size=64, buffer_size=100000, seed=24
 ):
     """Twin Delayed Deep Deterministic Policy training process.
 
@@ -72,6 +72,8 @@ def train(
         lr_policy (float): learning rate of policy network
 
         lr_q (float): learning rate of Q network
+
+        q_weight_decay (float): regularization factor to policy network
 
         sync_rate (float): the synchronize ratio between target network parameters and main
             networks. Equation is:
@@ -206,7 +208,7 @@ def train(
 
     # optimizer
     policy_opt = torch.optim.Adam(main_model.actor.parameters(), lr_policy)
-    q_opt = torch.optim.Adam(q_params, lr_q)
+    q_opt = torch.optim.Adam(q_params, lr_q, weight_decay=q_weight_decay)
 
     # experience buffer
     replay_buffer = utils.ReplayBuffer(env.obs_dim, 2, buffer_size)
