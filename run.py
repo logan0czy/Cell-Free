@@ -21,6 +21,25 @@ from env import Environment
 import utils
 
 
+def timeCount(cur_time, start_time):
+    """calculate elapsed time.
+
+    Returns:
+        format_t (string): elapsed time in format "D/H/M"
+        abs_t (float): elapsed time in seconds
+    """
+    abs_t = cur_time - start_time
+
+    temp = abs_t
+    d_unit, h_unit, m_unit = 24*3600, 3600, 60
+    days = int(temp//d_unit)
+    temp -= days*d_unit
+    hours = int(temp//h_unit)
+    temp -= hours*h_unit
+    mins = int(temp//m_unit) 
+    format_t = ":".join([str(days), str(hours), str(mins)])
+    return format_t, abs_t
+
 def train(
         env_kwargs, net_kwargs, cbook_kwargs, act_noise, tgt_noise, noise_clip, epochs=100,
         steps_per_epoch=10000, start_steps=10000, update_after=1000, update_every=50,
@@ -200,7 +219,7 @@ def train(
     tgt_model.train(False)
     for param in tgt_model.parameters():
         param.requires_grad = False
-    print("models created...")
+    print(f"models created... the devices are: main model:{main_model.device}, target model:{tgt_model.device}")
 
     # exploration noise
     act_ous = utils.OUStrategy(act_space={'dim': 2, 'low': -1*net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
@@ -225,6 +244,7 @@ def train(
     total_steps = epochs * steps_per_epoch
     obs = env.reset(seed)
     ep_rew = 0
+    start_time, ep_time = time.time(), time.time()
     for step in range(total_steps):
         if step < start_steps:
             act = net_kwargs['act_limit'] * np.random.uniform(-1, 1, 2).astype(np.float32)
@@ -251,7 +271,8 @@ def train(
                     loss_info[0].append(loss)
 
             if (step+1)%1000==0:
-                print(f"epoch: {step//steps_per_epoch}, steps: {step}, loss_q: {np.mean(loss_info[0]):.4f}, loss_policy: {np.mean(loss_info[1]):.4f}")
+                print(f"epoch: {step//steps_per_epoch}, steps: {step}, loss_q: {np.mean(loss_info[0]):.4f}, \
+                    loss_policy: {np.mean(loss_info[1]):.4f}, time elapse: {timeCount(time.time(), start_time)[0]}")
 
         if (step+1) % steps_per_epoch == 0:
             torch.cuda.empty_cache()
@@ -259,7 +280,9 @@ def train(
             act_ous.reset()
             tgt_ous.reset()
 
-            print(f"\nepoch: {step//steps_per_epoch}, avg_rew: {ep_rew/steps_per_epoch:.4f}\n")
+            print(f"\nepoch: {step//steps_per_epoch}, avg_rew: {ep_rew/steps_per_epoch:.4f}, \
+                speed: {timeCount(time.time(), ep_time)[1]/steps_per_epoch:.2f}\n")
+            ep_time = time.time()
 
 if __name__=='__main__':
     env_kwargs = {'max_power': 30, 'bs_atn': 4, 'ris_atn': (8, 4)}
