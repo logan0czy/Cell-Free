@@ -8,6 +8,7 @@ Reference: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch
 import time
 import math
 import itertools
+import gc
 from copy import deepcopy
 # from IPython.display import clear_output
 
@@ -21,11 +22,30 @@ from env import Environment
 import utils
 
 
+def timeCount(cur_time, start_time):
+    """calculate elapsed time.
+
+    Returns:
+        format_t (string): elapsed time in format "D/H/M"
+        abs_t (float): elapsed time in seconds
+    """
+    abs_t = cur_time - start_time
+
+    temp = abs_t
+    d_unit, h_unit, m_unit = 24*3600, 3600, 60
+    days = int(temp//d_unit)
+    temp -= days*d_unit
+    hours = int(temp//h_unit)
+    temp -= hours*h_unit
+    mins = int(temp//m_unit) 
+    format_t = ":".join([str(days), str(hours), str(mins)])
+    return format_t, abs_t
+
 def train(
         env_kwargs, net_kwargs, cbook_kwargs, act_noise, tgt_noise, noise_clip, epochs=100,
         steps_per_epoch=10000, start_steps=10000, update_after=1000, update_every=50,
-        policy_decay=2, lr_policy=1e-3, lr_q=1e-3, sync_rate=0.005, n_powers=4, gamma=0.6,
-        batch_size=64, buffer_size=100000, seed=24
+        policy_decay=2, lr_policy=1e-3, lr_q=1e-3, q_weight_decay=1e-4, policy_weight_decay=1e-4, 
+        sync_rate=0.005, n_powers=4, gamma=0.6, batch_size=64, buffer_size=100000, seed=24
 ):
     """Twin Delayed Deep Deterministic Policy training process.
 
@@ -72,6 +92,10 @@ def train(
         lr_policy (float): learning rate of policy network
 
         lr_q (float): learning rate of Q network
+
+        q_weight_decay (float): regularization factor to Q network
+
+        policy_weight_decay (float): regularization factor to policy network
 
         sync_rate (float): the synchronize ratio between target network parameters and main
             networks. Equation is:
@@ -152,36 +176,45 @@ def train(
         q_opt.zero_grad()
         q_loss = getQLoss(data)
         q_loss.backward()
+        nn.utils.clip_grad_norm_(q_params, 10)
         q_opt.step()
 
         if timer%policy_decay == 0:
             policy_opt.zero_grad()
             policy_loss = getPolicyLoss(data)
             policy_loss.backward()
+            nn.utils.clip_grad_norm_(main_model.actor.parameters(), 10)
             policy_opt.step()
 
             sync(main_model, tgt_model, sync_rate)
+            
+            return q_loss.item(), policy_loss.item()
 
-        return
+        return q_loss.item()
 
     def getAct(obs):
-        action = main_model.act(torch.as_tensor(obs, dtype=torch.float32, device=main_model.device))
-        action = act_ous.getActFromRaw(action.cpu())
+        action = main_model.act(torch.as_tensor([obs], dtype=torch.float32, device=main_model.device))
+        action = act_ous.getActFromRaw(action.squeeze(0).cpu().numpy().copy())
         return action
 
     np.random.seed(seed)
     torch.manual_seed(seed)
 
     env = Environment(**env_kwargs)
+    print("env created...")
 
     # beamforming codebook
     bs_cbook = utils.CodeBook(cbook_kwargs['bs_codes'], env.bs_atn, cbook_kwargs['bs_phases'])
     ris_ele_cbook = utils.CodeBook(cbook_kwargs['ris_codes'], env.ris_atn[1], cbook_kwargs['ris_ele_phases'])
     ris_azi_cbook = utils.CodeBook(cbook_kwargs['ris_codes'], env.ris_atn[0], cbook_kwargs['ris_azi_phases'])
+    ris_ele_cbook.scale()
+    ris_azi_cbook.scale()
+    print("codebook created...")
 
     # action decoder
     transfer = utils.Decoder(env, -net_kwargs['act_limit'], net_kwargs['act_limit'], bs_cbook,
                             ris_azi_cbook, ris_ele_cbook, [(i+1)*env.max_power/n_powers for i in range(n_powers)])
+    print("decoder created...")
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     main_model = ActorCritic(env.obs_dim, 2, **net_kwargs)
@@ -191,6 +224,7 @@ def train(
     tgt_model.train(False)
     for param in tgt_model.parameters():
         param.requires_grad = False
+    print(f"models created... the devices are: main model:{main_model.device}, target model:{tgt_model.device}")
 
     # exploration noise
     act_ous = utils.OUStrategy(act_space={'dim': 2, 'low': -1*net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
@@ -198,24 +232,27 @@ def train(
     tgt_ous = utils.OUStrategy(act_space={'dim': 2, 'low': -1*net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
                                max_sigma=np.array([tgt_noise*transfer.spacing[0], tgt_noise*transfer.spacing[1]], dtype=np.float32),
                                noise_clip=np.array([noise_clip*transfer.spacing[0], noise_clip*transfer.spacing[1]], dtype=np.float32))
+    print("noises created...")
 
     # list of parameters for both Q networks
     q_params = itertools.chain(main_model.q1.parameters(), main_model.q2.parameters())
 
     # optimizer
-    policy_opt = torch.optim.Adam(main_model.actor.parameters(), lr_policy)
-    q_opt = torch.optim.Adam(q_params, lr_q)
+    policy_opt = torch.optim.Adam(main_model.actor.parameters(), lr_policy, weight_decay=policy_weight_decay)
+    q_opt = torch.optim.Adam(q_params, lr_q, weight_decay=q_weight_decay)
 
     # experience buffer
     replay_buffer = utils.ReplayBuffer(env.obs_dim, 2, buffer_size)
+    print("replay buffer created...")
 
     # training process
     total_steps = epochs * steps_per_epoch
     obs = env.reset(seed)
     ep_rew = 0
+    start_time, ep_time = time.time(), time.time()
     for step in range(total_steps):
         if step < start_steps:
-            act = net_kwargs['act_limit'] * np.random.uniform(-1, 1, 2)
+            act = net_kwargs['act_limit'] * np.random.uniform(-1, 1, 2).astype(np.float32)
         else:
             act = getAct(obs)
         bs_beam, ris_beam = transfer.decode(act)
@@ -227,16 +264,34 @@ def train(
         obs = next_obs
 
         if (step+1) > update_after and (step+1-update_after)%update_every==0:
+            loss_info = [[], []]
             for j in range(update_every):
                 batch = replay_buffer.sampleBatch(batch_size)
-                update(batch, j)
+                loss = update(batch, j)
+
+                if not np.isscalar(loss):
+                    loss_info[0].append(loss[0])
+                    loss_info[1].append(loss[1])
+                else:
+                    loss_info[0].append(loss)
+
+            if (step+1)%1000==0:
+                print(f"epoch: {step//steps_per_epoch}, steps: {step}, loss_q: {np.mean(loss_info[0]):.4f}, \
+                    loss_policy: {np.mean(loss_info[1]):.4f}, time elapse: {timeCount(time.time(), start_time)[0]}")
 
         if (step+1) % steps_per_epoch == 0:
             obs = env.reset(seed)
             act_ous.reset()
             tgt_ous.reset()
 
-            print(f"epoch: {(step+1)//steps_per_epoch}, avg_rew: {ep_rew/steps_per_epoch}")
+            print(f"\nepoch: {step//steps_per_epoch}, avg_rew: {ep_rew/steps_per_epoch:.4f}, \
+                speed: {timeCount(time.time(), ep_time)[1]/steps_per_epoch:.2f}\n")
+            ep_time = time.time()
+            ep_rew = 0
+
+            torch.save(main_model.state_dict(), "./checkpoint/infer_model.pth")
+            torch.cuda.empty_cache()
+            gc.collect()
 
 if __name__=='__main__':
     env_kwargs = {'max_power': 30, 'bs_atn': 4, 'ris_atn': (8, 4)}

@@ -189,7 +189,7 @@ class Decoder():
             ris_act_id = int(ris_act_id)
 
         bs_beam = np.zeros((bs_num, self.env.bs_atn), dtype=np.complex64)
-        ris_beam = np.zeros((ris_num, math.prod(self.env.ris_atn)), dtype=np.complex64)
+        ris_beam = np.zeros((ris_num, np.prod(self.env.ris_atn)), dtype=np.complex64)
         for i in range(bs_num):
             power = self.power_levels[self.bs_map[bs_act_id, i*2]]
             bs_beam[i] = math.sqrt(power) * self.bs_cbook.book[self.bs_map[bs_act_id, i*2+1]]
