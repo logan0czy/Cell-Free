@@ -180,12 +180,12 @@ class Decoder():
             bs_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // self.spacing[0] + 1
             bs_act_id = int(bs_act_id)
         # ris action
-        if action[0] < self.act_low+interval*self.sat_ratio:
+        if action[1] < self.act_low+interval*self.sat_ratio:
             ris_act_id = 0
-        elif action[0] > self.act_high-interval*self.sat_ratio:
+        elif action[1] > self.act_high-interval*self.sat_ratio:
             ris_act_id = self.ris_act_size - 1
         else:
-            ris_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // self.spacing[1] + 1
+            ris_act_id = (action[1] - (self.act_low+interval*self.sat_ratio)) // self.spacing[1] + 1
             ris_act_id = int(ris_act_id)
 
         bs_beam = np.zeros((bs_num, self.env.bs_atn), dtype=np.complex64)
