@@ -125,8 +125,8 @@ def train(
         """
         # Bellman backup for Q function
         with torch.no_grad():
-            next_act = tgt_model.actor(data['next_obs'])
-            next_act = tgt_ous.getActFromRaw(next_act.cpu()).to(main_model.device)
+            next_act = tgt_model.actor(data['next_obs']).cpu().numpy()
+            next_act = torch.as_tensor(tgt_ous.getActFromRaw(next_act), dtype=torch.float32, device=main_model.device)
             q1_tgt = tgt_model.q1(data['next_obs'], next_act)
             q2_tgt = tgt_model.q2(data['next_obs'], next_act)
             q_tgt = torch.min(q1_tgt, q2_tgt)
@@ -276,16 +276,14 @@ def train(
                     loss_info[0].append(loss)
 
             if (step+1)%1000==0:
-                print(f"epoch: {step//steps_per_epoch}, steps: {step}, loss_q: {np.mean(loss_info[0]):.4f}, \
-                    loss_policy: {np.mean(loss_info[1]):.4f}, time elapse: {timeCount(time.time(), start_time)[0]}")
+                print(f"epoch: {step//steps_per_epoch}, steps: {step}, loss_q: {np.mean(loss_info[0]):.4f}, loss_policy: {np.mean(loss_info[1]):.4f}, time elapse: {timeCount(time.time(), start_time)[0]}")
 
         if (step+1) % steps_per_epoch == 0:
             obs = env.reset(seed)
             act_ous.reset()
             tgt_ous.reset()
 
-            print(f"\nepoch: {step//steps_per_epoch}, avg_rew: {ep_rew/steps_per_epoch:.4f}, \
-                speed: {timeCount(time.time(), ep_time)[1]/steps_per_epoch:.2f}\n")
+            print(f"\nepoch: {step//steps_per_epoch}, avg_rew: {ep_rew/steps_per_epoch:.4f}, speed: {timeCount(time.time(), ep_time)[1]/steps_per_epoch:.2f}\n")
             ep_time = time.time()
             ep_rew = 0
 
@@ -295,11 +293,11 @@ def train(
 
 if __name__=='__main__':
     env_kwargs = {'max_power': 30, 'bs_atn': 4, 'ris_atn': (8, 4)}
-    net_kwargs = {'critic_hidden_sizes': [1024, 512, 256], 
-                  'actor_hidden_sizes': [1024, 512, 256],
+    net_kwargs = {'critic_hidden_sizes': [512, 128], 
+                  'actor_hidden_sizes': [512, 128],
                   'act_limit': 1}
-    cbook_kwargs = {'bs_codes': 10, 'ris_codes': 8, 
-                    'bs_phases': 8,
-                    'ris_azi_phases': 4,
-                    'ris_ele_phases': 4}
-    train(env_kwargs, net_kwargs, cbook_kwargs, act_noise=2, tgt_noise=0, noise_clip=0)
+    cbook_kwargs = {'bs_codes': 20, 'ris_codes': 20, 
+                    'bs_phases': 16,
+                    'ris_azi_phases': 16,
+                    'ris_ele_phases': 16}
+    train(env_kwargs, net_kwargs, cbook_kwargs, act_noise=1, tgt_noise=0, noise_clip=0)
