@@ -49,7 +49,7 @@ class QFunc(nn.Module):
 
 class ActorCritic(nn.Module):
     def __init__(self, obs_dim, act_dim, critic_hidden_sizes, actor_hidden_sizes,
-                 act_limit=1, activation=nn.GELU):
+                 act_limit=1, activation=nn.ELU):
         super().__init__()
         self.actor = Actor(obs_dim, act_dim, actor_hidden_sizes, activation, act_limit)
         self.q1 = QFunc(obs_dim, act_dim, critic_hidden_sizes, activation)
