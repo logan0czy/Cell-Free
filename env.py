@@ -144,18 +144,17 @@ class Environment():
         """
         bs_num, ris_num, user_num = self.getCount()
         if not hasattr(self, 'bs2ris_csi'):
-            self.bs2ris_csi = np.zeros((bs_num, ris_num, np.prod(self.ris_atn), self.bs_atn), dtype=np.complex64) 
-            for i in range(bs_num):
-                for j in range(ris_num):
-                    pl = self.pl0 / np.linalg.norm(self.bs_loc[i]-self.ris_loc[j])**self.pl_exp[0]
-                    ris_arr_resp_ele = 1/math.sqrt(self.ris_atn[1]) \
-                                       *np.exp(1j*math.pi*np.arange(self.ris_atn[1])*math.sin(self.bs2ris_ele[i, j]))
-                    ris_arr_resp_azi = 1/math.sqrt(self.ris_atn[0]) \
-                                       *np.exp(1j*math.pi*np.arange(self.ris_atn[0])*math.cos(self.bs2ris_ele[i, j])*math.cos(self.bs2ris_azi[i, j]))
-                    bs_arr_resp_azi = 1/math.sqrt(self.bs_atn) \
-                                       *np.exp(1j*math.pi*np.arange(self.bs_atn)*math.sin(self.ris2bs_azi[j, i]))
-                    self.bs2ris_csi[i, j] = math.sqrt(pl) * np.kron(ris_arr_resp_ele, ris_arr_resp_azi)[:, np.newaxis] @ bs_arr_resp_azi[np.newaxis, :]
-        
+            pl = self.pl0 / np.linalg.norm(self.bs_loc[:, np.newaxis] - self.ris_loc[np.newaxis], axis=-1)**self.pl_exp[0]
+            ris_arr_resp_ele = 1 / np.sqrt(self.ris_atn[1]) \
+                * np.exp(1j*math.pi*np.arange(self.ris_atn[1])[np.newaxis, np.newaxis]*np.sin(self.bs2ris_ele)[:, :, np.newaxis])
+            ris_arr_resp_azi = 1 / np.sqrt(self.ris_atn[0]) \
+                * np.exp(1j*math.pi*np.arange(self.ris_atn[0])[np.newaxis, np.newaxis]*(np.cos(self.bs2ris_ele)*np.cos(self.bs2ris_azi))[:, :, np.newaxis])
+            bs_arr_resp_azi = 1 / np.sqrt(self.bs_atn) \
+                * np.exp(1j*math.pi*np.arange(self.bs_atn)[np.newaxis, np.newaxis]*np.sin(self.ris2bs_azi)[:, :, np.newaxis])
+            temp = np.matmul(ris_arr_resp_ele[:, :, :, np.newaxis], ris_arr_resp_azi[:, :, np.newaxis]).reshape(bs_num, ris_num, -1)
+            self.bs2ris_csi = np.sqrt(pl[:, :, np.newaxis, np.newaxis]) \
+                *  np.matmul(temp[:, :, :, np.newaxis], bs_arr_resp_azi[:, :, np.newaxis])
+
         bs2user_csi = np.zeros((bs_num, user_num, self.bs_atn), dtype=np.complex64)
         for i in range(bs_num):
             for j in range(user_num):
