@@ -143,47 +143,41 @@ class Environment():
             ris2user_csi : (ris_num, user_num, ris_atn)
         """
         bs_num, ris_num, user_num = self.getCount()
+        # -------- bs to ris csi --------
         if not hasattr(self, 'bs2ris_csi'):
             pl = self.pl0 / np.linalg.norm(self.bs_loc[:, np.newaxis] - self.ris_loc[np.newaxis], axis=-1)**self.pl_exp[0]
             ris_arr_resp_ele = 1 / np.sqrt(self.ris_atn[1]) \
                 * np.exp(1j*math.pi*np.arange(self.ris_atn[1])[np.newaxis, np.newaxis]*np.sin(self.bs2ris_ele)[:, :, np.newaxis])
             ris_arr_resp_azi = 1 / np.sqrt(self.ris_atn[0]) \
                 * np.exp(1j*math.pi*np.arange(self.ris_atn[0])[np.newaxis, np.newaxis]*(np.cos(self.bs2ris_ele)*np.cos(self.bs2ris_azi))[:, :, np.newaxis])
+            ris_arr_resp = np.matmul(ris_arr_resp_ele[:, :, :, np.newaxis], ris_arr_resp_azi[:, :, np.newaxis]).reshape(bs_num, ris_num, -1)
             bs_arr_resp_azi = 1 / np.sqrt(self.bs_atn) \
                 * np.exp(1j*math.pi*np.arange(self.bs_atn)[np.newaxis, np.newaxis]*np.sin(self.ris2bs_azi)[:, :, np.newaxis])
-            temp = np.matmul(ris_arr_resp_ele[:, :, :, np.newaxis], ris_arr_resp_azi[:, :, np.newaxis]).reshape(bs_num, ris_num, -1)
             self.bs2ris_csi = np.sqrt(pl[:, :, np.newaxis, np.newaxis]) \
-                *  np.matmul(temp[:, :, :, np.newaxis], bs_arr_resp_azi[:, :, np.newaxis])
+                *  np.matmul(ris_arr_resp[:, :, :, np.newaxis], bs_arr_resp_azi[:, :, np.newaxis])
 
-        bs2user_csi = np.zeros((bs_num, user_num, self.bs_atn), dtype=np.complex64)
-        for i in range(bs_num):
-            for j in range(user_num):
-                pl = self.pl0 / np.linalg.norm(self.bs_loc[i]-self.user_loc[j])**self.pl_exp[2]
-                theta_azi = self.user2bs_azi[j, i]
-                factor = np.exp(1j*np.random.uniform(-math.pi, math.pi, self.paths))
-                bs_arr_resp_azi = np.stack([1/math.sqrt(self.bs_atn) \
-                                        *np.exp(1j*math.pi*np.arange(self.bs_atn)*math.sin(np.random.uniform(theta_azi-self.angle_spread, theta_azi+self.angle_spread)))
-                                        for i in range(self.paths)])
-                bs2user_csi[i, j] = math.sqrt(pl/self.paths) * np.sum(factor[:, np.newaxis]*bs_arr_resp_azi, axis=0)
+        # -------- bs to user csi --------
+        pl = self.pl0 / np.linalg.norm(self.bs_loc[:, np.newaxis] - self.user_loc[np.newaxis], axis=-1)**self.pl_exp[2]
+        factor = np.exp(1j*np.random.uniform(-math.pi, math.pi, size=(bs_num, user_num, self.paths)))
+        theta_azi = self.user2bs_azi.T[:, :, np.newaxis] + np.random.uniform(-self.angle_spread, self.angle_spread, size=(bs_num, user_num, self.paths))
+        bs_arr_resp_azi = 1 / np.sqrt(self.bs_atn) \
+            * np.exp(1j*math.pi*np.arange(self.bs_atn)[np.newaxis, np.newaxis, np.newaxis]*np.sin(theta_azi)[:, :, :, np.newaxis])
+        bs2user_csi = np.sqrt(pl[:, :, np.newaxis]/self.paths) * np.sum(factor[:, :, :, np.newaxis]*bs_arr_resp_azi, axis=2)
 
-        ris2user_csi = np.zeros((ris_num, user_num, np.prod(self.ris_atn)), dtype=np.complex64)
-        for i in range(ris_num):
-            for j in range(user_num):
-                pl = self.pl0 / np.linalg.norm(self.ris_loc[i]-self.user_loc[j])**self.pl_exp[1]
-                theta_azi = self.user2ris_azi[j, i]
-                theta_ele = self.user2ris_ele[j, i]
-                factor = np.exp(1j*np.random.uniform(-math.pi, math.pi, self.paths))
-                ris_arr_resp = np.zeros((self.paths, np.prod(self.ris_atn)), dtype=np.complex64)
-                for path_id in range(self.paths):
-                    theta_azi_l = np.random.uniform(theta_azi-self.angle_spread, theta_azi+self.angle_spread)
-                    theta_ele_l = np.random.uniform(theta_ele-self.angle_spread, theta_ele+self.angle_spread)
-                    ris_arr_resp[path_id] = math.sqrt(1/np.prod(self.ris_atn)) \
-                                            * np.kron(np.exp(1j*math.pi*np.arange(self.ris_atn[1])*math.sin(theta_ele_l)), 
-                                                      np.exp(1j*math.pi*np.arange(self.ris_atn[0])*math.cos(theta_azi_l)*math.cos(theta_ele_l)))
-                ris2user_csi[i, j] = math.sqrt(pl/self.paths) * np.sum(factor[:, np.newaxis]*ris_arr_resp, axis=0)
+        # -------- ris to user csi --------
+        pl = self.pl0 / np.linalg.norm(self.ris_loc[:, np.newaxis] - self.user_loc[np.newaxis], axis=-1)**self.pl_exp[1]
+        factor = np.exp(1j*np.random.uniform(-math.pi, math.pi, size=(ris_num, user_num, self.paths)))
+        theta_ele = self.user2ris_ele.T[:, :, np.newaxis] + np.random.uniform(-self.angle_spread, self.angle_spread, size=(ris_num, user_num, self.paths))
+        theta_azi = self.user2ris_azi.T[:, :, np.newaxis] + np.random.uniform(-self.angle_spread, self.angle_spread, size=(ris_num, user_num, self.paths))
+        ris_arr_resp_ele = 1 / np.sqrt(self.ris_atn[1]) \
+            * np.exp(1j*math.pi*np.arange(self.ris_atn[1])[np.newaxis, np.newaxis, np.newaxis]*np.sin(theta_ele)[:, :, :, np.newaxis])
+        ris_arr_resp_azi = 1 / np.sqrt(self.ris_atn[0]) \
+            * np.exp(1j*math.pi*np.arange(self.ris_atn[0])[np.newaxis, np.newaxis, np.newaxis]*(np.cos(theta_ele)*np.cos(theta_azi))[:, :, :, np.newaxis])
+        ris_arr_resp = np.matmul(ris_arr_resp_ele[:, :, :, :, np.newaxis], ris_arr_resp_azi[:, :, :, np.newaxis]).reshape(ris_num, user_num, self.paths, -1)
+        ris2user_csi = np.sqrt(pl[:, :, np.newaxis]/self.paths) * np.sum(factor[:, :, :, np.newaxis]*ris_arr_resp, axis=2)
 
-        self.bs2user_csi = self.bs2user_csi*self.rho + math.sqrt(1-self.rho**2)*bs2user_csi if hasattr(self, 'bs2user_csi') else bs2user_csi
-        self.ris2user_csi = self.ris2user_csi*self.rho + math.sqrt(1-self.rho**2)*ris2user_csi if hasattr(self, 'ris2user_csi') else ris2user_csi
+        self.bs2user_csi = self.bs2user_csi*self.rho + np.sqrt(1-self.rho**2)*bs2user_csi if hasattr(self, 'bs2user_csi') else bs2user_csi
+        self.ris2user_csi = self.ris2user_csi*self.rho + np.sqrt(1-self.rho**2)*ris2user_csi if hasattr(self, 'ris2user_csi') else ris2user_csi
         return self.bs2user_csi, self.bs2ris_csi, self.ris2user_csi
 
     def _getRate(self, bs_beam, ris_beam):
