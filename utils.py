@@ -20,52 +20,36 @@ def combineShape(length, shape=None):
 class CodeBook():
     """Generate the 2-D beamforming codebook"""
 
-    def __init__(self, codes: int, antennas: int, phases: int=16):
+    def __init__(self, codes: int, antennas: int, phases: int=16, 
+        scale: bool=False, duplicated: bool=True):
         """
         Parameters:
             codes : the amount of codes
             antennas : the amount of antennas in horizontal or vertical dimension
             phases : the amount of available phases
+            scale : whether rescale the codebook. When the codebook is used for ris,
+                this operation must be done.
+            duplicated : if True, append the codebook's first code to end.
         """
-        self.codes = codes
-        self.antennas = antennas
-        self.phases = phases
-        self.scaled = False
-        self._generate()
-
-    def _element(self, code_num: int, antenna_num: int):
-        """get the (code_num, antenna_num) element's value."""
-        temp1 = (code_num+self.codes/2) % self.codes
-        temp2 = math.floor(antenna_num*temp1/(self.codes/self.phases))
-        value = 1 / math.sqrt(self.antennas) * np.exp(1j*2*math.pi/self.phases*temp2)
-        return value
+        self.codes = self._generate(codes, antennas, phases, duplicated)
+        if scale:
+            self.book = self.book * math.sqrt(self.antennas)
     
-    def _generate(self):
-        """Generate the codebook of shape (self.codes, self.antennas)
+    def _generate(self, codes, antennas, phases, duplicated):
+        """Generate the codebook of shape (codes, antennas)"""
+        def element(code_id: int, antenna_id: int):
+            """get the (code_id, antenna_id) element's value."""
+            temp = (code_id+codes/2) % codes
+            temp = math.floor(antenna_id*temp/(codes/phases))
+            value = 1 / math.sqrt(antennas) * np.exp(1j*2*math.pi/phases*temp)
+            return value
 
-        Return:
-            codebook
-        """
-        if hasattr(self, 'book'):
-            return
-        book = [[self._element(code_num, antenna_num) for antenna_num in range(self.antennas)]
-                for code_num in range(self.codes)
-            ]
+        book = [[element(code_id, antenna_id) for antenna_id in range(antennas)]
+                for code_id in range(codes)]
         self.book = np.array(book)
-        return
-
-    def scale(self):
-        """Rescale the codebook. When the codebook is used for ris,
-        must call this scale function first.
-
-        Return:
-            codebook: shape (self.codes, self.antennas)
-        """
-        if self.scaled:
-            return self.book
-        self.book = self.book * math.sqrt(self.antennas)
-        self.scaled = True
-        return self.book
+        if duplicated:
+            self.book = np.concatenate((self.book, self.book[[0]]), axis=0)
+        return len(self.book)
 
 class Decoder():
     """decode the action from policy to the real action to interact with cell-free environment."""
