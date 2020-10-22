@@ -186,13 +186,18 @@ class Environment():
             bs_beam : (bs_num, bs_atn)
             ris_beam : (ris_num, ris_atn, ris_atn), the last two dimension is diagnal matrix
         """
-        _, _, user_num = self.getCount()
+        bs_num, _, user_num = self.getCount()
+        signal_factor = 1 / user_num
+        bs_beam = np.broadcast_to(bs_beam[:, np.newaxis], (bs_num, user_num, self.bs_atn))
+        reflect_ch = np.sum(np.matmul(self.ris2user_csi[np.newaxis, :, :, np.newaxis], 
+                                      np.matmul(ris_beam[np.newaxis], self.bs2ris_csi)[:, :, np.newaxis]),
+                            axis=1)
+        combine_ch = self.bs2user_csi[:, :, np.newaxis] + reflect_ch
         rate = 0
         for user_id in range(user_num):
-            temp1 = np.sum((self.ris2user_csi[np.newaxis, :, np.newaxis, user_id] @ ris_beam[np.newaxis, :] @ self.bs2ris_csi).squeeze(2), 
-                            axis=1, keepdims=True)
-            signal_power = abs(np.sum(((self.bs2user_csi[:, [user_id]] + temp1) @ bs_beam[:, :, np.newaxis]).squeeze()))**2
-            rate += np.log2(1 + signal_power / ((user_num-1)*signal_power+user_num*self.noise))
+            receive_pws = np.abs(np.sum(np.matmul(combine_ch[:, [user_id]], bs_beam[:, :, :, np.newaxis]).squeeze((2, 3)), axis=0))**2
+            idxs = [k for k in range(user_num) if k!= user_id]
+            rate += np.log2(1 + signal_factor*receive_pws[user_id]/(signal_factor*np.sum(receive_pws[idxs])+self.noise))
         return rate
 
     def _csi2state(self):
