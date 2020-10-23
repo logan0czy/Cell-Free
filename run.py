@@ -126,7 +126,8 @@ def train(
         # Bellman backup for Q function
         with torch.no_grad():
             next_act = tgt_model.actor(data['next_obs']).cpu().numpy()
-            next_act = torch.as_tensor(tgt_ous.getActFromRaw(next_act), dtype=torch.float32, device=main_model.device)
+            next_act = torch.as_tensor(tgt_ous.getActFromRaw(next_act), 
+                dtype=torch.float32, device=main_model.device)
             q1_tgt = tgt_model.q1(data['next_obs'], next_act)
             q2_tgt = tgt_model.q2(data['next_obs'], next_act)
             q_tgt = torch.min(q1_tgt, q2_tgt)
@@ -176,14 +177,14 @@ def train(
         q_opt.zero_grad()
         q_loss = getQLoss(data)
         q_loss.backward()
-        nn.utils.clip_grad_norm_(q_params, 10)
+        # nn.utils.clip_grad_norm_(q_params, 10)
         q_opt.step()
 
         if timer%policy_decay == 0:
             policy_opt.zero_grad()
             policy_loss = getPolicyLoss(data)
             policy_loss.backward()
-            nn.utils.clip_grad_norm_(main_model.actor.parameters(), 10)
+            # nn.utils.clip_grad_norm_(main_model.actor.parameters(), 10)
             policy_opt.step()
 
             sync(main_model, tgt_model, sync_rate)
@@ -194,8 +195,41 @@ def train(
 
     def getAct(obs):
         action = main_model.act(torch.as_tensor([obs], dtype=torch.float32, device=main_model.device))
-        action = act_ous.getActFromRaw(action.squeeze(0).cpu().numpy().copy())
+        action = act_ous.getActFromRaw(action.squeeze(0).cpu().numpy())
         return action
+
+    def actTranser(act):
+        """transform action from policy network to beamforming vectors.
+        
+        Default:
+            first 'bs_num' elements corresponds to power for each base station
+            then 'bs_num' elements corresponds to beam for each base station
+            then 'ris_num' elements corresponds to elevation beam for each ris
+            last 'ris_num' elements corresponds to azimuth beam for each ris
+
+        Returns:
+            bs_beam (np.array): shape is (bs_num, bs_atn)
+            ris_beam (np.array): shape is (ris_num, ris_atn, ris_atn), the last two
+                dims store diagnal matrix.
+        """
+        bs_num, ris_num, _ = env.getCount()
+
+        shift = 0
+        power = decoders['power'].decode(act[:bs_num])
+        shift += bs_num
+        bs_beam = decoders['bs'].decode(act[shift:shift+bs_num])
+        shift += bs_num
+        ris_ele_beam = decoders['ris_ele'].decode(act[shift:shift+ris_num])
+        shift += ris_num
+        ris_azi_beam = decoders]'ris_azi'].decode(act[shift:shift+ris_num])
+
+        bs_beam = np.sqrt(power[:, np.newaxis]) * bs_beam
+        ris_beam = np.matmul(ris_ele_beam[:, :, np.newaxis], ris_azi_beam[:, np.newaxis]), reshape(ris_num, -1)
+        ris_beam_expand = np.zeros(ris_beam.shape+ris_beam.shape[-1:], dtype=ris_beam.dtype)
+        diagonals = ris_beam_expand.diagonal(axis1=-2, axis2=-1)
+        diagonals.setflags(write=True)
+        diagonals[:] = ris_beam.copy()
+        return bs_beam, ris_beam_expand
 
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -211,7 +245,16 @@ def train(
     ris_azi_cbook.scale()
     print("codebook created...")
 
-    # action decoder
+    # action decoders
+    decoders = dict(power=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']), 
+                        np.array([i*env.max_power/10. for i in range(1, 11)]),sat_ratio=0),
+                    bs_azi=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']),
+                        bs_cbook.book, sat_ratio=0),
+                    ris_ele=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']),
+                        ris_ele_cbook.book, sat_ratio=0),
+                    ris_azi=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']),
+                        ris_azi_cbook.book, sat_ratio=0)
+    )
     transfer = utils.Decoder(env, -net_kwargs['act_limit'], net_kwargs['act_limit'], bs_cbook,
                             ris_azi_cbook, ris_ele_cbook, [(i+1)*env.max_power/n_powers for i in range(n_powers)])
     print("decoder created...")

@@ -52,140 +52,45 @@ class CodeBook():
         return len(self.book)
 
 class Decoder():
-    """decode the action from policy to the real action to interact with cell-free environment."""
+    """decode specific action to its real value."""
 
-    def __init__(self, env, act_low, act_high, bs_cbook, ris_azi_cbook, ris_ele_cbook, 
-        power_levels, sat_ratio=0.05):
+    def __init__(self, act_range, act_choices, sat_ratio: float=0.05):
         """
         Parameters:
-            env (env.Environment): the cell-free network
-
-            act_low/act_high (float): the lowest/highest action value, assume these are the same for
-                each dimension
-
-            bs_cbook (CodeBook): codebook of base station
-
-            ris_azi_cbook (CodeBook): codebook of ris in the azimuth dimension
-
-            ris_ele_cbook (CodeBook): codebook of ris in the elevation dimension
-
-            power_levels (tuple): choice of power
-
-            sat_ratio (float): ratio of interval [act_low, act_high]. In case of the saturation problem
+            act_range (tuple): range of action value, [act_low, act_high]
+            act_choices (np.array): all kinds of choices with shape (N, *)
+            sat_ratio : ratio of action range. In case of the saturation problem
                 when use 'tanh' activation function, assign the first and the last ratio of action 
-                interval to one action respectively. 
+                interval to one action respectively (when the ratio value is large than 0).
         """
-        self.env = env
-        self.act_low, self.act_high = act_low, act_high
-        self.bs_cbook = bs_cbook
-        self.ris_azi_cbook = ris_azi_cbook
-        self.ris_ele_cbook = ris_ele_cbook
-        self.power_levels = power_levels
+        self.range = act_range
+        self.choices = act_choices
         self.sat_ratio = sat_ratio
-        self._genMap()
+        if sat_ratio>0:
+            self.spacing = self.range * (1-2*sat_ratio) / (len(self.choices)-2)
+        else:
+            self.spacing = self.range / len(self.choices)
 
-        # calculate absolute values of interval corresponding to the same action
-        self.spacing = ((self.act_high-self.act_low)*(1-2*self.sat_ratio) / (self.bs_act_size-2),
-                        (self.act_high-self.act_low)*(1-2*self.sat_ratio) / (self.ris_act_size-2))
-
-    def _genMap(self):
-        """generate the map between the discretized value of action from policy
-        to the actual action to env. The maps for a single object are:
-            base station action : power_level_id, bs_cbook_id
-            ris action : azi_cbook_id, ele_cbook_id
-        """
-        def combine(arr1, arr2):
-            """get all of possible combinations among two array instances along
-            the first dimension."""
-            res = []
-            for i1 in arr1:
-                for i2 in arr2:
-                    i1 = np.array([i1]) if np.isscalar(i1) else i1.reshape(-1)
-                    i2 = np.array([i2]) if np.isscalar(i2) else i2.reshape(-1)
-                    res.append(np.concatenate((i1, i2)))
-            res = np.stack(res, axis=0)
-            return res
-
-        def genIndexCombine(*sizes):
-            """
-            Parameters:
-                sizes (List(int))
-            
-            Returns:
-                res (np.array)
-            """
-            res = np.arange(sizes[0])
-            for i in range(1, len(sizes)):
-                res = combine(res, np.arange(sizes[i]))
-            return res
-
-        def genArrayCombine(*arrs):
-            """
-            Parameters:
-                arrs (List[np.array])
-
-            Returns:
-                res (np.array)
-            """
-            res = arrs[0]
-            for i in range(1, len(arrs)):
-                res = combine(res, arrs[i])
-            return res
-        
-        bs_num, ris_num, _ = self.env.getCount()
-        self.bs_act_size = (len(self.power_levels) * self.bs_cbook.codes)**(bs_num)
-        self.ris_act_size = (self.ris_azi_cbook.codes * self.ris_ele_cbook.codes)**(ris_num)
-
-        single_bs_act = genIndexCombine(len(self.power_levels), self.bs_cbook.codes)
-        single_ris_act = genIndexCombine(self.ris_ele_cbook.codes, self.ris_azi_cbook.codes)
-        self.bs_map = genArrayCombine(*[single_bs_act for i in range(bs_num)])
-        self.ris_map = genArrayCombine(*[single_ris_act for i in range(ris_num)])
-        return
-
-    def decode(self, action):
+    def decode(self, act_val):
         """
         Parameters:
-            action (np.array): shape is (2,), the first dim is for base station, the second
-                dim is for ris.
-        
+            act_val (np.array): vector of action values with shape (K,).
+
         Returns:
-            bs_beam (np.array): shape is (bs_num, bs_atn)
-            ris_beam (np.array): shape is (ris_num, ris_atn, ris_atn), the last two dimension
-                is diagnal matrix
+            acts (np.array): real action from choices with shape (K, *).
         """
-        bs_num, ris_num, _ = self.env.getCount()
-        interval = self.act_high - self.act_low
-        # base station action
-        if action[0] < self.act_low+interval*self.sat_ratio:
-            bs_act_id = 0
-        elif action[0] > self.act_high-interval*self.sat_ratio:
-            bs_act_id = self.bs_act_size - 1
-        else:
-            bs_act_id = (action[0] - (self.act_low+interval*self.sat_ratio)) // self.spacing[0] + 1
-            bs_act_id = int(bs_act_id)
-        # ris action
-        if action[1] < self.act_low+interval*self.sat_ratio:
-            ris_act_id = 0
-        elif action[1] > self.act_high-interval*self.sat_ratio:
-            ris_act_id = self.ris_act_size - 1
-        else:
-            ris_act_id = (action[1] - (self.act_low+interval*self.sat_ratio)) // self.spacing[1] + 1
-            ris_act_id = int(ris_act_id)
+        def discretize(val):
+            if self.sat_ratio==0:
+                return int(val // self.spacing)
+            if val < (self.range[1]-self.range[0])*self.sat_ratio:
+                return 0
+            if val >= (self.range[1] - (self.range[1]-self.range[0])*self.sat_ratio):
+                return -1
+            residual = val - (self.range[1]-self.range[0])*self.sat_ratio
+            return int(residual // self.spacing) + 1
 
-        bs_beam = np.zeros((bs_num, self.env.bs_atn), dtype=np.complex64)
-        ris_beam = np.zeros((ris_num, np.prod(self.env.ris_atn)), dtype=np.complex64)
-        for i in range(bs_num):
-            power = self.power_levels[self.bs_map[bs_act_id, i*2]]
-            bs_beam[i] = math.sqrt(power) * self.bs_cbook.book[self.bs_map[bs_act_id, i*2+1]]
-        for j in range(ris_num):
-            ris_beam[j] = np.kron(self.ris_ele_cbook.book[self.ris_map[ris_act_id, j*2]], 
-                                  self.ris_azi_cbook.book[self.ris_map[ris_act_id, j*2+1]])
-        ris_beam_expand = np.zeros(ris_beam.shape+ris_beam.shape[-1:], dtype=ris_beam.dtype)
-        diagonals = ris_beam_expand.diagonal(axis1=-2, axis2=-1)
-        diagonals.setflags(write=True)
-        diagonals[:] = ris_beam.copy()
-
-        return bs_beam, ris_beam_expand
+        idxs = map(discretize, act_val)
+        return self.choices[idxs]
 
 class ReplayBuffer():
     """An experience replay buffer.
