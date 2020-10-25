@@ -33,7 +33,7 @@ class CodeBook():
         """
         self.codes = self._generate(codes, antennas, phases, duplicated)
         if scale:
-            self.book = self.book * math.sqrt(self.antennas)
+            self.book = self.book * math.sqrt(antennas)
     
     def _generate(self, codes, antennas, phases, duplicated):
         """Generate the codebook of shape (codes, antennas)"""
@@ -67,9 +67,9 @@ class Decoder():
         self.choices = act_choices
         self.sat_ratio = sat_ratio
         if sat_ratio>0:
-            self.spacing = self.range * (1-2*sat_ratio) / (len(self.choices)-2)
+            self.spacing = (self.range[1]-self.range[0]) * (1-2*sat_ratio) / (len(self.choices)-2)
         else:
-            self.spacing = self.range / len(self.choices)
+            self.spacing = (self.range[1]-self.range[0]) / len(self.choices)
 
     def decode(self, act_val):
         """
@@ -89,7 +89,7 @@ class Decoder():
             residual = val - (self.range[1]-self.range[0])*self.sat_ratio
             return int(residual // self.spacing) + 1
 
-        idxs = map(discretize, act_val)
+        idxs = list(map(discretize, act_val))
         return self.choices[idxs]
 
 class ReplayBuffer():
