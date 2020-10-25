@@ -167,6 +167,7 @@ def train(
 
     def update(data, timer):
         """update actor-critic network.
+
         Parameters:
             data (dict): include batches of state transitions and the reward,
                 keys are {'obs', 'next_obs', 'act', 'rew'}
@@ -217,14 +218,14 @@ def train(
         shift = 0
         power = decoders['power'].decode(act[:bs_num])
         shift += bs_num
-        bs_beam = decoders['bs'].decode(act[shift:shift+bs_num])
+        bs_beam = decoders['bs_azi'].decode(act[shift:shift+bs_num])
         shift += bs_num
         ris_ele_beam = decoders['ris_ele'].decode(act[shift:shift+ris_num])
         shift += ris_num
-        ris_azi_beam = decoders]'ris_azi'].decode(act[shift:shift+ris_num])
+        ris_azi_beam = decoders['ris_azi'].decode(act[shift:shift+ris_num])
 
         bs_beam = np.sqrt(power[:, np.newaxis]) * bs_beam
-        ris_beam = np.matmul(ris_ele_beam[:, :, np.newaxis], ris_azi_beam[:, np.newaxis]), reshape(ris_num, -1)
+        ris_beam = np.matmul(ris_ele_beam[:, :, np.newaxis], ris_azi_beam[:, np.newaxis]).reshape(ris_num, -1)
         ris_beam_expand = np.zeros(ris_beam.shape+ris_beam.shape[-1:], dtype=ris_beam.dtype)
         diagonals = ris_beam_expand.diagonal(axis1=-2, axis2=-1)
         diagonals.setflags(write=True)
@@ -234,20 +235,21 @@ def train(
     np.random.seed(seed)
     torch.manual_seed(seed)
 
+    # environment create
     env = Environment(**env_kwargs)
     print("env created...")
 
     # beamforming codebook
     bs_cbook = utils.CodeBook(cbook_kwargs['bs_codes'], env.bs_atn, cbook_kwargs['bs_phases'])
-    ris_ele_cbook = utils.CodeBook(cbook_kwargs['ris_codes'], env.ris_atn[1], cbook_kwargs['ris_ele_phases'])
-    ris_azi_cbook = utils.CodeBook(cbook_kwargs['ris_codes'], env.ris_atn[0], cbook_kwargs['ris_azi_phases'])
-    ris_ele_cbook.scale()
-    ris_azi_cbook.scale()
+    ris_ele_cbook = utils.CodeBook(cbook_kwargs['ris_ele_codes'], env.ris_atn[1], 
+        cbook_kwargs['ris_ele_phases'], scale=True)
+    ris_azi_cbook = utils.CodeBook(cbook_kwargs['ris_azi_codes'], env.ris_atn[0], 
+        cbook_kwargs['ris_azi_phases'], scale=True)
     print("codebook created...")
 
     # action decoders
     decoders = dict(power=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']), 
-                        np.array([i*env.max_power/10. for i in range(1, 11)]),sat_ratio=0),
+                        np.array([i*env.max_power/10. for i in range(1, 11)]), sat_ratio=0),
                     bs_azi=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']),
                         bs_cbook.book, sat_ratio=0),
                     ris_ele=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']),
@@ -255,12 +257,10 @@ def train(
                     ris_azi=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']),
                         ris_azi_cbook.book, sat_ratio=0)
     )
-    transfer = utils.Decoder(env, -net_kwargs['act_limit'], net_kwargs['act_limit'], bs_cbook,
-                            ris_azi_cbook, ris_ele_cbook, [(i+1)*env.max_power/n_powers for i in range(n_powers)])
     print("decoder created...")
 
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    main_model = ActorCritic(env.obs_dim, 2, **net_kwargs)
+    device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
+    main_model = ActorCritic(env.obs_dim, env.act_dim, **net_kwargs)
     main_model.to(device)
     tgt_model = deepcopy(main_model)
 
@@ -270,11 +270,14 @@ def train(
     print(f"models created... the devices are: main model:{main_model.device}, target model:{tgt_model.device}")
 
     # exploration noise
-    act_ous = utils.OUStrategy(act_space={'dim': 2, 'low': -1*net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
-                               max_sigma=np.array([act_noise*transfer.spacing[0], act_noise*transfer.spacing[1]], dtype=np.float32))
-    tgt_ous = utils.OUStrategy(act_space={'dim': 2, 'low': -1*net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
-                               max_sigma=np.array([tgt_noise*transfer.spacing[0], tgt_noise*transfer.spacing[1]], dtype=np.float32),
-                               noise_clip=np.array([noise_clip*transfer.spacing[0], noise_clip*transfer.spacing[1]], dtype=np.float32))
+    spacings = np.array([decoders['power'].spacing]*env.getCount(0)
+        +[decoders['bs_azi'].spacing]*env.getCount(0)
+        +[decoders['ris_ele'].spacing]*env.getCount(1)
+        +[decoders['ris_azi'].spacing]*env.getCount(1)).astype(np.float32)
+    act_ous = utils.OUStrategy(act_space={'dim': env.act_dim, 'low': -net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
+        max_sigma=act_noise*spacings)
+    tgt_ous = utils.OUStrategy(act_space={'dim': env.act_dim, 'low': -net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
+        max_sigma=tgt_noise*spacings, noise_clip=noise_clip*spacings)
     print("noises created...")
 
     # list of parameters for both Q networks
@@ -285,7 +288,7 @@ def train(
     q_opt = torch.optim.Adam(q_params, lr_q, weight_decay=q_weight_decay)
 
     # experience buffer
-    replay_buffer = utils.ReplayBuffer(env.obs_dim, 2, buffer_size)
+    replay_buffer = utils.ReplayBuffer(env.obs_dim, env.act_dim, buffer_size)
     print("replay buffer created...")
 
     # training process
@@ -295,10 +298,10 @@ def train(
     start_time, ep_time = time.time(), time.time()
     for step in range(total_steps):
         if step < start_steps:
-            act = net_kwargs['act_limit'] * np.random.uniform(-1, 1, 2).astype(np.float32)
+            act = net_kwargs['act_limit'] * np.random.uniform(-1, 1, env.act_dim).astype(np.float32)
         else:
             act = getAct(obs)
-        bs_beam, ris_beam = transfer.decode(act)
+        bs_beam, ris_beam = actTranser(act)
         next_obs, rew = env.step(bs_beam, ris_beam)
         ep_rew += rew
 
@@ -330,8 +333,8 @@ def train(
             ep_time = time.time()
             ep_rew = 0
 
-            torch.save(main_model.state_dict(), "./checkpoint/infer_model.pth")
-            torch.cuda.empty_cache()
+            torch.save(main_model.state_dict(), "./checkpoint/model_param.pth")
+            # torch.cuda.empty_cache()
             gc.collect()
 
 if __name__=='__main__':
@@ -339,8 +342,10 @@ if __name__=='__main__':
     net_kwargs = {'critic_hidden_sizes': [512, 128], 
                   'actor_hidden_sizes': [512, 128],
                   'act_limit': 1}
-    cbook_kwargs = {'bs_codes': 20, 'ris_codes': 20, 
+    cbook_kwargs = {'bs_codes': 16, 
+                    'ris_ele_codes': 10, 
+                    'ris_azi_codes': 20,
                     'bs_phases': 16,
-                    'ris_azi_phases': 16,
-                    'ris_ele_phases': 16}
-    train(env_kwargs, net_kwargs, cbook_kwargs, act_noise=1, tgt_noise=0, noise_clip=0)
+                    'ris_azi_phases': 8,
+                    'ris_ele_phases': 8}
+    train(env_kwargs, net_kwargs, cbook_kwargs, act_noise=1, tgt_noise=2, noise_clip=4)
