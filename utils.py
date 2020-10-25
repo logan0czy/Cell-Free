@@ -192,13 +192,6 @@ class OUStrategy():
 
 if __name__=='__main__':
     env = Environment(30)
-    bs_cbook = CodeBook(10, env.bs_atn)
-    ris_ele_cbook, ris_azi_cbook = CodeBook(8, env.ris_atn[1], phases=4), CodeBook(8, env.ris_atn[0], phases=4)
-    ris_ele_cbook.scale()
-    ris_azi_cbook.scale()
-
-    transer = Decoder(env, -1, 1, bs_cbook, ris_azi_cbook, ris_ele_cbook, 
-                      [env.max_power*i for i in range(1, 5)])
-    bs_beam, ris_beam = transer.decode(np.array([0.3, -0.5]))
-    print(f"bs_beam, shape{bs_beam.shape}\n{bs_beam}")
-    print(f"ris_beam, shape{ris_beam.shape}\n{ris_beam}")
+    bs_cbook = CodeBook(16, env.bs_atn)
+    ris_azi_cbook = CodeBook(10, env.ris_atn[0], phases=8, scale=True)
+    ris_ele_cbook = CodeBook(20, env.ris_atn[1], phases=8, scale=True)

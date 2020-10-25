@@ -255,16 +255,14 @@ if __name__=='__main__':
     
     # -------- csi & rate demo --------
     bs_num, ris_num, user_num = env.getCount()
-    bs_cbook = CodeBook(10, env.bs_atn)
-    ris_azi_cbook = CodeBook(8, env.ris_atn[0], phases=4)
-    ris_ele_cbook = CodeBook(8, env.ris_atn[1], phases=4)
-    ris_azi_cbook.scale()
-    ris_ele_cbook.scale()
+    bs_cbook = CodeBook(16, env.bs_atn)
+    ris_azi_cbook = CodeBook(10, env.ris_atn[0], phases=8, scale=True)
+    ris_ele_cbook = CodeBook(20, env.ris_atn[1], phases=8, scale=True)
     # base station beamforming
     bs_beam = np.zeros((bs_num, env.bs_atn), dtype=np.complex64)
     for i in range(bs_num):
         bs_beam[i] = bs_cbook.book[np.random.randint(bs_cbook.codes)]
-    bs_beam = math.sqrt(env.max_power) * bs_beam
+    bs_beam = np.sqrt(env.max_power) * bs_beam
     # ris beamforming
     ris_beam = np.zeros((ris_num, np.prod(env.ris_atn)), dtype=np.complex64)
     for i in range(ris_num):
