@@ -15,43 +15,40 @@ import mpl_toolkits.mplot3d.axes3d as axes3d
 from utils import CodeBook
 
 
-def plot2D(cbook, ax):
+def plot2D(cbook, ax, antennas):
     """unifomr linear array beamforming pattern plotting
 
     Parameters:
         cbook (CodeBook)
         ax (axes.SubplotBase)
     """
-    codes = cbook.generate()
-    for code in codes:
+    for code in cbook.codes:
         thetas = np.linspace(0, 2*math.pi, num=100, endpoint=False)
         array_response = np.array(
-            [1/math.sqrt(cbook.antennas)*np.exp(1j*math.pi*np.arange(cbook.antennas)*math.cos(theta))
+            [1/math.sqrt(antennas)*np.exp(1j*math.pi*np.arange(antennas)*math.cos(theta))
             for theta in thetas])
         value = abs(np.sum(code*array_response, axis=1))
         ax.plot(thetas, value)
 
-def plot3D(cbook_h, cbook_v, choice, ax):
+def plot3D(cbook_azi, cbook_ele, choice, ax, antennas_azi, antennas_ele):
     """uniform rectangular array beamforming pattern plotting
 
     Parameters:
-        cbook_h (CodeBook): horizontal beamforming codebook
-        cbook_v (CodeBook): vertical beamforming codebook
+        cbook_azi (CodeBook): azimuth beamforming codebook
+        cbook_ele (CodeBook): elevation beamforming codebook
         choice (tuple): beamforming code choice
         ax (axes.SubplotBase)
     """
-    cbook_h.scale()
-    cbook_v.scale()
-    code_h, code_v = cbook_h.book[choice[0]], cbook_v.book[choice[1]]
+    code_azi, code_ele = cbook_azi.book[choice[0]], cbook_ele.book[choice[1]]
 
     thetas = np.linspace(0, 2*math.pi, 100, endpoint=False)
     betas = np.linspace(-math.pi/2, math.pi/2, 50)
     values = np.zeros((len(betas), len(thetas)), dtype=np.float32)
     for i, beta in enumerate(betas):
         for j, theta in enumerate(thetas):
-            array_response_v = 1/math.sqrt(cbook_v.antennas)*np.exp(1j*math.pi*np.arange(cbook_v.antennas)*math.sin(beta))
-            array_response_h = 1/math.sqrt(cbook_h.antennas)*np.exp(1j*math.pi*np.arange(cbook_h.antennas)*math.cos(theta)*math.cos(beta))
-            values[i, j] = abs(np.sum(np.kron(code_v*array_response_v, code_h*array_response_h)))
+            array_response_ele = 1/math.sqrt(antennas_ele)*np.exp(1j*math.pi*np.arange(antennas_ele)*math.sin(beta))
+            array_response_azi = 1/math.sqrt(antennas_azi)*np.exp(1j*math.pi*np.arange(antennas_azi)*math.cos(theta)*math.cos(beta))
+            values[i, j] = abs(np.sum(np.kron(code_ele*array_response_ele, code_azi*array_response_azi)))
 
     THETA, BETA = np.meshgrid(thetas, betas)
     X = values * np.cos(BETA) * np.sin(THETA)
@@ -64,19 +61,21 @@ def plot3D(cbook_h, cbook_v, choice, ax):
 
 if __name__=='__main__':
     sns.set()
-    cbook_bs = CodeBook(10, 4)
-    cbook_ris_h, cbook_ris_v = CodeBook(4, 8, phases=4), CodeBook(4, 4, phases=4)
+    bs_cbook = CodeBook(16, 4, duplicated=Fasle)
+    ris_azi_cbook = CodeBook(4, 8, phases=8, scale=True, duplicated=False)
+    ris_ele_cbook = CodeBook(4, 4, phases=8, scale=True, duplicated=False)
     # -------- show beamforming pattern --------
     plt.figure(figsize=(8, 8))
     ax = plt.subplot(111, polar=True)
-    plot2D(cbook_bs, ax)
-    plt.title("2-D beamforming with %ddirections"%cbook_bs.codes)
+    plot2D(bs_cbook, ax, 4)
+    plt.title("2-D beamforming with %ddirections"%bs_cbook.codes)
+    plt.legend()
     
     plt.figure(figsize=(12, 12))
-    for id_h in range(cbook_ris_h.codes):
-        for id_v in range(cbook_ris_v.codes):
-            ax = plt.subplot(cbook_ris_h.codes, cbook_ris_v.codes, id_h*cbook_ris_h.codes+id_v+1, projection='3d')
-            plot3D(cbook_ris_h, cbook_ris_v, (id_h, id_v), ax)
+    for id_h in range(ris_azi_cbook.codes):
+        for id_v in range(ris_ele_cbook.codes):
+            ax = plt.subplot(ris_azi_cbook.codes, ris_ele_cbook.codes, id_h*ris_azi_cbook.codes+id_v+1, projection='3d')
+            plot3D(ris_azi_cbook, ris_ele_cbook, (id_h, id_v), ax, 8, 4)
             ax.set_title(f"azi id-{id_h}, ele id-{id_v}")
     plt.suptitle(f"3-D beamforming", y=0.95)
     plt.show()
