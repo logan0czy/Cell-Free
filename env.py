@@ -70,6 +70,7 @@ class Environment():
         self.obs_dim = bs_num*ris_num*2*np.prod(self.ris_atn)*self.bs_atn \
                         + ris_num*user_num*2*np.prod(self.ris_atn) \
                         + bs_num*user_num*2*self.bs_atn
+        self.act_dim = bs_num*2 + ris_num*2
     
     def _genLoc(self, radius: int=50, height: int=5):
         """generate the location of base stations, RISs and users
@@ -206,9 +207,15 @@ class Environment():
                               np.real(self.ris2user_csi).reshape(-1), np.imag(self.ris2user_csi).reshape(-1)))
         return obs
 
-    def getCount(self):
+    def getCount(self, idx=None):
         """get the number of base stations, RIS and users"""
-        return len(self.bs_loc), len(self.ris_loc), len(self.user_loc)
+        if idx is None:
+            return len(self.bs_loc), len(self.ris_loc), len(self.user_loc)
+        nums = (len(self.bs_loc), len(self.ris_loc), len(self.user_loc))
+        if np.isscalar(idx):
+            return nums[idx]
+        else:
+            return [nums[i] for i in idx]
 
     def reset(self, seed):
         np.random.seed(seed)
