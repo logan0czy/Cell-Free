@@ -45,7 +45,7 @@ def train(
         env_kwargs, net_kwargs, cbook_kwargs, act_noise, tgt_noise, noise_clip, epochs=100,
         steps_per_epoch=10000, start_steps=10000, update_after=1000, update_every=50,
         policy_decay=2, lr_policy=1e-3, lr_q=1e-3, q_weight_decay=1e-4, policy_weight_decay=1e-4, 
-        sync_rate=0.005, n_powers=4, gamma=0.6, batch_size=64, buffer_size=100000, seed=24
+        sync_rate=0.005, n_powers=10, gamma=0.6, batch_size=64, buffer_size=100000, seed=24
 ):
     """Twin Delayed Deep Deterministic Policy training process.
 
@@ -178,14 +178,14 @@ def train(
         q_opt.zero_grad()
         q_loss = getQLoss(data)
         q_loss.backward()
-        # nn.utils.clip_grad_norm_(q_params, 10)
+        nn.utils.clip_grad_norm_(q_params, 10)
         q_opt.step()
 
         if timer%policy_decay == 0:
             policy_opt.zero_grad()
             policy_loss = getPolicyLoss(data)
             policy_loss.backward()
-            # nn.utils.clip_grad_norm_(main_model.actor.parameters(), 10)
+            nn.utils.clip_grad_norm_(main_model.actor.parameters(), 10)
             policy_opt.step()
 
             sync(main_model, tgt_model, sync_rate)
@@ -249,7 +249,7 @@ def train(
 
     # action decoders
     decoders = dict(power=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']), 
-                        np.array([i*env.max_power/10. for i in range(1, 11)]), sat_ratio=0),
+                        np.array([i*env.max_power/n_powers for i in range(1, n_powers+1)]), sat_ratio=0),
                     bs_azi=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']),
                         bs_cbook.book, sat_ratio=0),
                     ris_ele=utils.Decoder((-net_kwargs['act_limit'], net_kwargs['act_limit']),
@@ -321,7 +321,7 @@ def train(
                 else:
                     loss_info[0].append(loss)
 
-            if (step+1)%1000==0:
+            if (step+1)%2000==0:
                 print(f"epoch: {step//steps_per_epoch}, steps: {step}, loss_q: {np.mean(loss_info[0]):.4f}, loss_policy: {np.mean(loss_info[1]):.4f}, time elapse: {timeCount(time.time(), start_time)[0]}")
 
         if (step+1) % steps_per_epoch == 0:
@@ -340,12 +340,14 @@ def train(
 if __name__=='__main__':
     env_kwargs = {'max_power': 30, 'bs_atn': 4, 'ris_atn': (8, 4)}
     net_kwargs = {'critic_hidden_sizes': [512, 128], 
-                  'actor_hidden_sizes': [512, 128],
+                  'actor_hidden_sizes': [1024, 512, 256, 128],
                   'act_limit': 1}
     cbook_kwargs = {'bs_codes': 16, 
                     'ris_ele_codes': 10, 
-                    'ris_azi_codes': 20,
+                    'ris_azi_codes': 16,
                     'bs_phases': 16,
-                    'ris_azi_phases': 8,
-                    'ris_ele_phases': 8}
-    train(env_kwargs, net_kwargs, cbook_kwargs, act_noise=1, tgt_noise=2, noise_clip=4)
+                    'ris_azi_phases': 4,
+                    'ris_ele_phases': 4}
+    train(env_kwargs, net_kwargs, cbook_kwargs, 
+        act_noise=1, tgt_noise=2, noise_clip=3, policy_weight_decay=1e-3, q_weight_decay=1e-3,
+        update_every=100, lr_q=3e-4, lr_policy=1e-4, batch_size=128)
