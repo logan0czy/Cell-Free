@@ -206,7 +206,7 @@ class Environment():
             receive_pws = np.abs(np.sum(np.matmul(combine_ch[:, [user_id]], bs_beam[:, :, :, np.newaxis]).squeeze((2, 3)), axis=0))**2
             idxs = [k for k in range(user_num) if k!= user_id]
             rate += np.log2(1 + signal_pw*receive_pws[user_id]/(signal_pw*np.sum(receive_pws[idxs])+self.noise))
-        return rate
+        return rate / user_num
 
     def _csi2state(self):
         obs = np.concatenate((np.real(self.bs2user_csi).reshape(-1), np.imag(self.bs2user_csi).reshape(-1),
