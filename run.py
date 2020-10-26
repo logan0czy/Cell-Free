@@ -157,21 +157,18 @@ def train(
 
         act = main_model.actor(data['obs'])
         # power used punish
-        act_pw = act[:, env.getCount(0)*env.getCount(2)].detach().cpu().numpy()
-        act_pw = np.array([decoders['power'].decode(i) for i in act_pw]).reshape(batch_size, env.getCount(0), env.getCount(2))
-        act_pw = np.sum(act_pw, axis=2)
-        punish_idx = np.argwhere(act_pw>env.max_power)
-        act_pw = act[:, env.getCount(0)*env.getCount(2)].view(batch_size, env.getCount(0), env.getCount(2))
-        punish = torch.sum(act_pw[punish_idx[:, 0], punish_idx[:, 1]])
+        act_pw = act[:, :env.getCount(0)*env.getCount(2)].view(batch_size, env.getCount(0), env.getCount(2))
+        punish_idx = np.argwhere(np.sum(decoders['power'].decode(act_pw.detach().cpu().numpy()), axis=2) > env.max_power)
+        punish = torch.sum((act_pw[punish_idx[:, 0], punish_idx[:, 1]]+net_kwargs['act_limit'])**2)
 
-        loss_policy = -main_model.q1(data['obs'], act).mean() + 0.1*punish
+        loss_policy = -main_model.q1(data['obs'], act).mean() + punish
 
         main_model.q1.train(True)
         main_model.q2.train(True)
         for param in q_params:
             param.requires_grad = True
 
-        return loss_policy
+        return loss_policy, punish.item()
 
     def update(data, timer):
         """update actor-critic network.
@@ -191,14 +188,14 @@ def train(
 
         if timer%policy_decay == 0:
             policy_opt.zero_grad()
-            policy_loss = getPolicyLoss(data)
+            policy_loss, policy_punish = getPolicyLoss(data)
             policy_loss.backward()
             nn.utils.clip_grad_norm_(main_model.actor.parameters(), 10)
             policy_opt.step()
 
             sync(main_model, tgt_model, sync_rate)
             
-            return q_loss.item(), policy_loss.item()
+            return q_loss.item(), policy_loss.item(), policy_punish
 
         return q_loss.item()
 
@@ -319,7 +316,7 @@ def train(
         obs = next_obs
 
         if (step+1) > update_after and (step+1-update_after)%update_every==0:
-            loss_info = [[], []]
+            loss_info = [[], [], []]
             for j in range(update_every):
                 batch = replay_buffer.sampleBatch(batch_size)
                 loss = update(batch, j)
@@ -327,11 +324,12 @@ def train(
                 if not np.isscalar(loss):
                     loss_info[0].append(loss[0])
                     loss_info[1].append(loss[1])
+                    loss_info[2].append(loss[2])
                 else:
                     loss_info[0].append(loss)
 
             if (step+1)%2000==0:
-                print(f"epoch: {step//steps_per_epoch}, steps: {step}, loss_q: {np.mean(loss_info[0]):.4f}, loss_policy: {np.mean(loss_info[1]):.4f}, time elapse: {timeCount(time.time(), start_time)[0]}")
+                print(f"steps: {step}, loss_q: {np.mean(loss_info[0]):.4f}, loss_policy: {np.mean(loss_info[1]):.4f}, punish: {np.mean(loss_info[2]):.4f}, time elapse: {timeCount(time.time(), start_time)[0]}")
 
         if (step+1) % steps_per_epoch == 0:
             obs = env.reset(seed)
@@ -359,5 +357,5 @@ if __name__=='__main__':
                     'ris_ele_phases': 4}
     train(env_kwargs, net_kwargs, cbook_kwargs, 
         act_noise=1, tgt_noise=2, noise_clip=3, 
-        policy_weight_decay=1e-3, q_weight_decay=1e-3, lr_q=3e-4, lr_policy=1e-4,
-        epochs=500, batch_size=128)
+        policy_weight_decay=1e-4, q_weight_decay=1e-4, lr_q=3e-4, lr_policy=3e-4,
+        epochs=200, batch_size=128)

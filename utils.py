@@ -74,10 +74,10 @@ class Decoder():
     def decode(self, act_val):
         """
         Parameters:
-            act_val (np.array): vector of action values with shape (K,).
+            act_val (np.array): array of action values with shape (d0, d1, ..., dN).
 
         Returns:
-            acts (np.array): real action from choices with shape (K, *).
+            acts (np.array): real action from choices with shape (d0, d1, ..., dN, dN+1, ..., dN+choice_dim).
         """
         def discretize(val):
             if self.sat_ratio==0:
@@ -89,8 +89,11 @@ class Decoder():
             residual = val - (self.range[1]-self.range[0])*self.sat_ratio
             return int(residual // self.spacing) + 1
 
-        idxs = list(map(discretize, act_val))
-        return self.choices[idxs]
+        act_val_shape = act_val.shape
+        choice_shape = self.choices.shape
+        idxs = list(map(discretize, act_val.reshape(-1)))
+        acts = self.choices[idxs].reshape((*act_val_shape, *choice_shape[1:]))
+        return acts
 
 class ReplayBuffer():
     """An experience replay buffer.
