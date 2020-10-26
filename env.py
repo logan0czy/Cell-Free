@@ -161,7 +161,7 @@ class Environment():
                 * np.exp(1j*math.pi*np.arange(self.ris_atn[0])[np.newaxis, np.newaxis]*(np.cos(self.bs2ris_ele)*np.cos(self.bs2ris_azi))[:, :, np.newaxis])
             ris_arr_resp = np.matmul(ris_arr_resp_ele[:, :, :, np.newaxis], ris_arr_resp_azi[:, :, np.newaxis]).reshape(bs_num, ris_num, -1)
             bs_arr_resp_azi = 1 / np.sqrt(self.bs_atn) \
-                * np.exp(1j*math.pi*np.arange(self.bs_atn)[np.newaxis, np.newaxis]*np.sin(self.ris2bs_azi)[:, :, np.newaxis])
+                * np.exp(1j*math.pi*np.arange(self.bs_atn)[np.newaxis, np.newaxis]*np.sin(self.ris2bs_azi).T[:, :, np.newaxis])
             self.bs2ris_csi = np.sqrt(pl[:, :, np.newaxis, np.newaxis]) \
                 *  np.matmul(ris_arr_resp[:, :, :, np.newaxis], bs_arr_resp_azi[:, :, np.newaxis])
 
