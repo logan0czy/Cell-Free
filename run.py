@@ -156,7 +156,15 @@ def train(
             param.requires_grad = False
 
         act = main_model.actor(data['obs'])
-        loss_policy = -main_model.q1(data['obs'], act).mean()
+        # power used punish
+        act_pw = act[:, env.getCount(0)*env.getCount(2)].detach().cpu().numpy()
+        act_pw = np.array([decoders['power'].decode(i) for i in act_pw]).reshape(batch_size, env.getCount(0), env.getCount(2))
+        act_pw = np.sum(act_pw, axis=2)
+        punish_idx = np.argwhere(act_pw>env.max_power)
+        act_pw = act[:, env.getCount(0)*env.getCount(2)].view(batch_size, env.getCount(0), env.getCount(2))
+        punish = torch.sum(act_pw[punish_idx[:, 0], punish_idx[:, 1]])
+
+        loss_policy = -main_model.q1(data['obs'], act).mean() + 0.1*punish
 
         main_model.q1.train(True)
         main_model.q2.train(True)
@@ -203,28 +211,29 @@ def train(
         """transform action from policy network to beamforming vectors.
         
         Default:
-            first 'bs_num' elements corresponds to power for each base station
-            then 'bs_num' elements corresponds to beam for each base station
+            first 'bs_num*user_num' elements corresponds to power for each base station to user
+            then 'bs_num*user_num' elements corresponds to beam for each base station to user
             then 'ris_num' elements corresponds to elevation beam for each ris
             last 'ris_num' elements corresponds to azimuth beam for each ris
 
         Returns:
-            bs_beam (np.array): shape is (bs_num, bs_atn)
+            bs_beam (np.array): shape is (bs_num, user_num, bs_atn)
             ris_beam (np.array): shape is (ris_num, ris_atn, ris_atn), the last two
                 dims store diagnal matrix.
         """
-        bs_num, ris_num, _ = env.getCount()
+        bs_num, ris_num, user_num = env.getCount()
 
         shift = 0
-        power = decoders['power'].decode(act[:bs_num])
-        shift += bs_num
-        bs_beam = decoders['bs_azi'].decode(act[shift:shift+bs_num])
-        shift += bs_num
+        power = decoders['power'].decode(act[:bs_num*user_num]).reshape(bs_num, user_num, 1)
+        shift += bs_num*user_num
+        bs_beam = decoders['bs_azi'].decode(act[shift:shift+bs_num*user_num]).reshape(bs_num, user_num, -1)
+        shift += bs_num*user_num
         ris_ele_beam = decoders['ris_ele'].decode(act[shift:shift+ris_num])
         shift += ris_num
         ris_azi_beam = decoders['ris_azi'].decode(act[shift:shift+ris_num])
 
-        bs_beam = np.sqrt(power[:, np.newaxis]) * bs_beam
+        bs_beam = np.sqrt(power) * bs_beam
+        # bs_beam = np.broadcast_to(bs_beam[:, np.newaxis], (bs_num, user_num, self.bs_atn))
         ris_beam = np.matmul(ris_ele_beam[:, :, np.newaxis], ris_azi_beam[:, np.newaxis]).reshape(ris_num, -1)
         ris_beam_expand = np.zeros(ris_beam.shape+ris_beam.shape[-1:], dtype=ris_beam.dtype)
         diagonals = ris_beam_expand.diagonal(axis1=-2, axis2=-1)
@@ -270,8 +279,8 @@ def train(
     print(f"models created... the devices are: main model:{main_model.device}, target model:{tgt_model.device}")
 
     # exploration noise
-    spacings = np.array([decoders['power'].spacing]*env.getCount(0)
-        +[decoders['bs_azi'].spacing]*env.getCount(0)
+    spacings = np.array([decoders['power'].spacing]*env.getCount(0)*env.getCount(2)
+        +[decoders['bs_azi'].spacing]*env.getCount(0)*env.getCount(2)
         +[decoders['ris_ele'].spacing]*env.getCount(1)
         +[decoders['ris_azi'].spacing]*env.getCount(1)).astype(np.float32)
     act_ous = utils.OUStrategy(act_space={'dim': env.act_dim, 'low': -net_kwargs['act_limit'], 'high': net_kwargs['act_limit']},
@@ -349,5 +358,6 @@ if __name__=='__main__':
                     'ris_azi_phases': 4,
                     'ris_ele_phases': 4}
     train(env_kwargs, net_kwargs, cbook_kwargs, 
-        act_noise=1, tgt_noise=2, noise_clip=3, policy_weight_decay=1e-3, q_weight_decay=1e-3,
-        update_every=100, lr_q=3e-4, lr_policy=1e-4, batch_size=128)
+        act_noise=1, tgt_noise=2, noise_clip=3, 
+        policy_weight_decay=1e-3, q_weight_decay=1e-3, lr_q=3e-4, lr_policy=1e-4,
+        epochs=500, batch_size=128)

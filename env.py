@@ -70,7 +70,7 @@ class Environment():
         self.obs_dim = bs_num*ris_num*2*np.prod(self.ris_atn)*self.bs_atn \
                         + ris_num*user_num*2*np.prod(self.ris_atn) \
                         + bs_num*user_num*2*self.bs_atn
-        self.act_dim = bs_num*2 + ris_num*2
+        self.act_dim = bs_num*2*user_num + ris_num*2
     
     def _genLoc(self, radius: int=50, height: int=5):
         """generate the location of base stations, RISs and users
@@ -81,18 +81,26 @@ class Environment():
         """
         self.bs_loc = np.array([[-radius, 0, height], [radius, 0, height]])
         self.bs_loc_delta = np.array([[0, 1, 0], [0, 1, 0]])
-        self.ris_loc = np.array([[0, radius, height], [0, -radius, height]])
-        self.ris_loc_delta = np.array([[1, 0, 0], [1, 0, 0]])
+        # self.ris_loc = np.array([[0, radius, height], [0, -radius, height]])
+        # self.ris_loc_delta = np.array([[1, 0, 0], [1, 0, 0]])
+        self.ris_loc = np.array([[0, radius, height], ])
+        self.ris_loc_delta = np.array([[1, 0, 0], ])
 
-        ptr, user_num = 0, 8
-        self.user_loc = np.zeros((user_num, 3), dtype=np.float32) 
+        # ptr, user_num = 0, 8
+        # self.user_loc = np.zeros((user_num, 3), dtype=np.float32) 
+        # for theta in np.arange(math.pi/4, 2*math.pi, math.pi/2):
+        #     self.user_loc[ptr, 0] = radius*math.cos(theta)
+        #     self.user_loc[ptr, 1] = radius*math.sin(theta)
+        #     ptr += 1
+        # for theta in np.arange(0, 2*math.pi, math.pi/2):
+        #     self.user_loc[ptr, 0] = radius/2*math.cos(theta)
+        #     self.user_loc[ptr, 1] = radius/2*math.sin(theta)
+        #     ptr += 1
+        ptr = 0
+        self.user_loc = np.zeros((4, 3), dtype=np.float32) 
         for theta in np.arange(math.pi/4, 2*math.pi, math.pi/2):
-            self.user_loc[ptr, 0] = radius*math.cos(theta)
-            self.user_loc[ptr, 1] = radius*math.sin(theta)
-            ptr += 1
-        for theta in np.arange(0, 2*math.pi, math.pi/2):
-            self.user_loc[ptr, 0] = radius/2*math.cos(theta)
-            self.user_loc[ptr, 1] = radius/2*math.sin(theta)
+            self.user_loc[ptr, 0] = radius / 2 * math.cos(theta)
+            self.user_loc[ptr, 1] = radius / 2 * math.sin(theta)
             ptr += 1
         return
     
@@ -184,12 +192,11 @@ class Environment():
     def _getRate(self, bs_beam, ris_beam):
         """calculate total transmission rate.
         Parameters:
-            bs_beam : (bs_num, bs_atn)
+            bs_beam : (bs_num, user_num, bs_atn)
             ris_beam : (ris_num, ris_atn, ris_atn), the last two dimension is diagnal matrix
         """
         bs_num, _, user_num = self.getCount()
-        signal_factor = 1 / user_num
-        bs_beam = np.broadcast_to(bs_beam[:, np.newaxis], (bs_num, user_num, self.bs_atn))
+        signal_pw = 1  # represent each user's signal power
         reflect_ch = np.sum(np.matmul(self.ris2user_csi[np.newaxis, :, :, np.newaxis], 
                                       np.matmul(ris_beam[np.newaxis], self.bs2ris_csi)[:, :, np.newaxis]),
                             axis=1)
@@ -198,7 +205,7 @@ class Environment():
         for user_id in range(user_num):
             receive_pws = np.abs(np.sum(np.matmul(combine_ch[:, [user_id]], bs_beam[:, :, :, np.newaxis]).squeeze((2, 3)), axis=0))**2
             idxs = [k for k in range(user_num) if k!= user_id]
-            rate += np.log2(1 + signal_factor*receive_pws[user_id]/(signal_factor*np.sum(receive_pws[idxs])+self.noise))
+            rate += np.log2(1 + signal_pw*receive_pws[user_id]/(signal_pw*np.sum(receive_pws[idxs])+self.noise))
         return rate
 
     def _csi2state(self):
@@ -256,13 +263,13 @@ if __name__=='__main__':
     # -------- csi & rate demo --------
     bs_num, ris_num, user_num = env.getCount()
     bs_cbook = CodeBook(16, env.bs_atn)
-    ris_azi_cbook = CodeBook(10, env.ris_atn[0], phases=8, scale=True)
-    ris_ele_cbook = CodeBook(20, env.ris_atn[1], phases=8, scale=True)
+    ris_azi_cbook = CodeBook(10, env.ris_atn[0], phases=4, scale=True)
+    ris_ele_cbook = CodeBook(16, env.ris_atn[1], phases=4, scale=True)
     # base station beamforming
-    bs_beam = np.zeros((bs_num, env.bs_atn), dtype=np.complex64)
+    bs_beam = np.zeros((bs_num, user_num, env.bs_atn), dtype=np.complex64)
     for i in range(bs_num):
-        bs_beam[i] = bs_cbook.book[np.random.randint(bs_cbook.codes)]
-    bs_beam = np.sqrt(env.max_power) * bs_beam
+        for j in range(user_num):
+            bs_beam[i, j] = np.sqrt(env.max_power/user_num) * bs_cbook.book[np.random.randint(bs_cbook.codes)]
     # ris beamforming
     ris_beam = np.zeros((ris_num, np.prod(env.ris_atn)), dtype=np.complex64)
     for i in range(ris_num):
