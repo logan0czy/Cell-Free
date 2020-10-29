@@ -41,6 +41,43 @@ def timeCount(cur_time, start_time):
     format_t = ":".join([str(days), str(hours), str(mins)])
     return format_t, abs_t
 
+def actTranser(act, env, power_decoder, bs_azi_decoder, 
+        ris_ele_decoder, ris_azi_decoder
+):
+    """transform action from policy network to beamforming vector
+    Act Default:
+        1-D vector
+        first 'bs_num*user_num' elements corresponds to power for each base station to user
+        then 'bs_num*user_num' elements corresponds to beam for each base station to user
+        then 'ris_num' elements corresponds to elevation beam for each ris
+        last 'ris_num' elements corresponds to azimuth beam for each ris
+
+    Returns:
+        bs_beam (np.array): shape is (bs_num, user_num, bs_atn)
+        ris_beam (np.array): shape is (ris_num, ris_atn, ris_atn), the last two
+            dims store diagnal matrix.
+    """
+    bs_num, ris_num, user_num = env.getCount()
+
+    shift = 0
+    power = power_decoder.decode(act[:bs_num*user_num]).reshape(bs_num, user_num, 1)
+    shift += bs_num*user_num
+    bs_beam = bs_azi_decoder.decode(act[shift:shift+bs_num*user_num]).reshape(bs_num, user_num, -1)
+    shift += bs_num*user_num
+    ris_ele_beam = ris_ele_decoder.decode(act[shift:shift+ris_num])
+    shift += ris_num
+    ris_azi_beam = ris_azi_decoder.decode(act[shift:shift+ris_num])
+
+    bs_beam = np.sqrt(power) * bs_beam
+
+    ris_beam = np.matmul(ris_ele_beam[:, :, np.newaxis], ris_azi_beam[:, np.newaxis]).reshape(ris_num, -1)
+    ris_beam_expand = np.zeros(ris_beam.shape+ris_beam.shape[-1:], dtype=ris_beam.dtype)
+    diagonals = ris_beam_expand.diagonal(axis1=-2, axis2=-1)
+    diagonals.setflags(write=True)
+    diagonals[:] = ris_beam.copy()
+
+    return bs_beam, ris_beam_expand
+
 def train(
         env_kwargs, net_kwargs, cbook_kwargs, act_noise, tgt_noise, noise_clip, 
         epochs=100, steps_per_epoch=10000, start_steps=10000, update_after=1000, update_every=50,
@@ -226,40 +263,6 @@ def train(
         action = act_ous.getActFromRaw(action.squeeze(0).cpu().numpy())
         return action
 
-    def actTranser(act):
-        """transform action from policy network to beamforming vectors.
-        
-        Default:
-            first 'bs_num*user_num' elements corresponds to power for each base station to user
-            then 'bs_num*user_num' elements corresponds to beam for each base station to user
-            then 'ris_num' elements corresponds to elevation beam for each ris
-            last 'ris_num' elements corresponds to azimuth beam for each ris
-
-        Returns:
-            bs_beam (np.array): shape is (bs_num, user_num, bs_atn)
-            ris_beam (np.array): shape is (ris_num, ris_atn, ris_atn), the last two
-                dims store diagnal matrix.
-        """
-        bs_num, ris_num, user_num = env.getCount()
-
-        shift = 0
-        power = decoders['power'].decode(act[:bs_num*user_num]).reshape(bs_num, user_num, 1)
-        shift += bs_num*user_num
-        bs_beam = decoders['bs_azi'].decode(act[shift:shift+bs_num*user_num]).reshape(bs_num, user_num, -1)
-        shift += bs_num*user_num
-        ris_ele_beam = decoders['ris_ele'].decode(act[shift:shift+ris_num])
-        shift += ris_num
-        ris_azi_beam = decoders['ris_azi'].decode(act[shift:shift+ris_num])
-
-        bs_beam = np.sqrt(power) * bs_beam
-        # bs_beam = np.broadcast_to(bs_beam[:, np.newaxis], (bs_num, user_num, self.bs_atn))
-        ris_beam = np.matmul(ris_ele_beam[:, :, np.newaxis], ris_azi_beam[:, np.newaxis]).reshape(ris_num, -1)
-        ris_beam_expand = np.zeros(ris_beam.shape+ris_beam.shape[-1:], dtype=ris_beam.dtype)
-        diagonals = ris_beam_expand.diagonal(axis1=-2, axis2=-1)
-        diagonals.setflags(write=True)
-        diagonals[:] = ris_beam.copy()
-        return bs_beam, ris_beam_expand
-
     np.random.seed(seed)
     torch.manual_seed(seed)
 
@@ -332,7 +335,8 @@ def train(
             act = net_kwargs['act_limit'] * np.random.uniform(-1, 1, env.act_dim).astype(np.float32)
         else:
             act = getAct(obs)
-        bs_beam, ris_beam = actTranser(act)
+        bs_beam, ris_beam = actTranser(act, env, decoders['power'], 
+            decoders['bs_azi'], decoders['ris_ele'], decoders['ris_azi'])
         next_obs, rew = env.step(bs_beam, ris_beam)
         ep_rew += rew
 
@@ -373,6 +377,30 @@ def train(
             torch.save(main_model.state_dict(), "./checkpoint/model_param.pth")
             # torch.cuda.empty_cache()
             gc.collect()
+
+def test(env, model, decoders, 
+        bs2user_CSI, bs2ris_CSI, ris2user_CSI
+):
+    """
+    Parameters:
+        bs2user_CSI (np.array): shape is (N, bs_num, user_num, bs_atn)
+        bs2ris_CSI (np.array): shape is (N, bs_num, ris_num, ris_atn, bs_atn)
+        ris2user_CSI (np.array): shape is (N, ris_num, user_num, ris_atn)
+
+    Return:
+        avg_sum_rate (float)
+    """
+    sum_rate = 0
+    count = 0
+    for bs2user_csi, bs2ris_csi, ris2user_csi in zip(bs2user_CSI, bs2ris_CSI, ris2user_CSI):
+        obs = env.setCSI(bs2user_csi, bs2ris_csi, ris2user_csi)
+        obs = torch.as_tensor([obs], dtype=torch.float32, device=model.device)
+        act = model.act(obs).squeeze(0).cpu().numpy()
+        bs_beam, ris_beam = actTranser(act, env, decoders['power'], 
+            decoders['bs_azi'], decoders['ris_ele'], decoders['ris_azi'])
+        sum_rate += env._getRate(bs_beam, ris_beam)
+        count += 1
+    return sum_rate / count
 
 if __name__=='__main__':
     env_kwargs = {'max_power': 30, 'bs_atn': 4, 'ris_atn': (8, 4)}
