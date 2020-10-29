@@ -81,27 +81,27 @@ class Environment():
         """
         self.bs_loc = np.array([[-radius, 0, height], [radius, 0, height]])
         self.bs_loc_delta = np.array([[0, 1, 0], [0, 1, 0]])
-        # self.ris_loc = np.array([[0, radius, height], [0, -radius, height]])
-        # self.ris_loc_delta = np.array([[1, 0, 0], [1, 0, 0]])
-        self.ris_loc = np.array([[0, radius, height], ])
-        self.ris_loc_delta = np.array([[1, 0, 0], ])
+        self.ris_loc = np.array([[0, radius, height], [0, -radius, height]])
+        self.ris_loc_delta = np.array([[1, 0, 0], [1, 0, 0]])
+        # self.ris_loc = np.array([[0, radius, height], ])
+        # self.ris_loc_delta = np.array([[1, 0, 0], ])
 
-        # ptr, user_num = 0, 8
-        # self.user_loc = np.zeros((user_num, 3), dtype=np.float32) 
-        # for theta in np.arange(math.pi/4, 2*math.pi, math.pi/2):
-        #     self.user_loc[ptr, 0] = radius*math.cos(theta)
-        #     self.user_loc[ptr, 1] = radius*math.sin(theta)
-        #     ptr += 1
-        # for theta in np.arange(0, 2*math.pi, math.pi/2):
-        #     self.user_loc[ptr, 0] = radius/2*math.cos(theta)
-        #     self.user_loc[ptr, 1] = radius/2*math.sin(theta)
-        #     ptr += 1
-        ptr = 0
-        self.user_loc = np.zeros((4, 3), dtype=np.float32) 
+        ptr, user_num = 0, 8
+        self.user_loc = np.zeros((user_num, 3), dtype=np.float32) 
         for theta in np.arange(math.pi/4, 2*math.pi, math.pi/2):
-            self.user_loc[ptr, 0] = radius / 2 * math.cos(theta)
-            self.user_loc[ptr, 1] = radius / 2 * math.sin(theta)
+            self.user_loc[ptr, 0] = radius*math.cos(theta)
+            self.user_loc[ptr, 1] = radius*math.sin(theta)
             ptr += 1
+        for theta in np.arange(0, 2*math.pi, math.pi/2):
+            self.user_loc[ptr, 0] = radius/2*math.cos(theta)
+            self.user_loc[ptr, 1] = radius/2*math.sin(theta)
+            ptr += 1
+        # ptr = 0
+        # self.user_loc = np.zeros((4, 3), dtype=np.float32) 
+        # for theta in np.arange(math.pi/4, 2*math.pi, math.pi/2):
+        #     self.user_loc[ptr, 0] = radius / 2 * math.cos(theta)
+        #     self.user_loc[ptr, 1] = radius / 2 * math.sin(theta)
+        #     ptr += 1
         return
     
     def _genAngle(self):
@@ -111,36 +111,19 @@ class Environment():
             _azi: angle in azimuth dimension
             _ele: angle in elevation dimension
         """
-        bs_num, ris_num, user_num = self.getCount()
-        # -------- w.r.t RIS --------
-        self.bs2ris_azi = np.zeros((bs_num, ris_num), dtype=np.float32)
-        self.bs2ris_ele = np.zeros((bs_num, ris_num), dtype=np.float32)
-        for i in range(bs_num):
-            for j in range(ris_num):
-                theta_azi, theta_ele = angle(self.bs_loc[i], self.ris_loc[j], self.ris_loc_delta[j])
-                self.bs2ris_azi[i, j] = theta_azi
-                self.bs2ris_ele[i, j] = theta_ele
+        def getAngles(tgt_locs, src_locs, src_locs_delta):
+            tgt_num, src_num = len(tgt_locs), len(src_locs)
+            _azi = np.zeros((tgt_num, src_num), dtype=np.float32)
+            _ele = np.zeros((tgt_num, src_num), dtype=np.float32)
+            for i in range(tgt_num):
+                for j in range(src_num):
+                    _azi[i, j], _ele[i, j] = angle(tgt_locs[i], src_locs[j], src_locs_delta[j])
+            return _azi, _ele
 
-        self.user2ris_azi = np.zeros((user_num, ris_num), dtype=np.float32)
-        self.user2ris_ele = np.zeros((user_num, ris_num), dtype=np.float32)
-        for i in range(user_num):
-            for j in range(ris_num):
-                theta_azi, theta_ele = angle(self.user_loc[i], self.ris_loc[j], self.ris_loc_delta[j])
-                self.user2ris_azi[i, j] = theta_azi
-                self.user2ris_ele[i, j] = theta_ele
-
-        # -------- w.r.t base station --------
-        self.ris2bs_azi = np.zeros((ris_num, bs_num), dtype=np.float32)
-        for i in range(ris_num):
-            for j in range(bs_num):
-                theta_azi, _ = angle(self.ris_loc[i], self.bs_loc[j], self.bs_loc_delta[j])
-                self.ris2bs_azi[i, j] = theta_azi
-
-        self.user2bs_azi = np.zeros((user_num, bs_num), dtype=np.float32)
-        for i in range(user_num):
-            for j in range(bs_num):
-                theta_azi, _ = angle(self.user_loc[i], self.bs_loc[j], self.bs_loc_delta[j])
-                self.user2bs_azi[i, j] = theta_azi
+        self.bs2ris_azi, self.bs2ris_ele = getAngles(self.bs_loc, self.ris_loc, self.ris_loc_delta)
+        self.user2ris_azi, self.user2ris_ele = getAngles(self.user_loc, self.ris_loc, self.ris_loc_delta)
+        self.ris2bs_azi, _ = getAngles(self.ris_loc, self.bs_loc, self.bs_loc_delta)
+        self.user2bs_azi, _ = getAngles(self.user_loc, self.bs_loc, self.bs_loc_delta)
         return
 
     def _changeCSI(self):
@@ -206,7 +189,7 @@ class Environment():
             receive_pws = np.abs(np.sum(np.matmul(combine_ch[:, [user_id]], bs_beam[:, :, :, np.newaxis]).squeeze((2, 3)), axis=0))**2
             idxs = [k for k in range(user_num) if k!= user_id]
             rate += np.log2(1 + signal_pw*receive_pws[user_id]/(signal_pw*np.sum(receive_pws[idxs])+self.noise))
-        return rate / user_num
+        return rate
 
     def _csi2state(self):
         obs = np.concatenate((np.real(self.bs2user_csi).reshape(-1), np.imag(self.bs2user_csi).reshape(-1),
@@ -239,6 +222,16 @@ class Environment():
         self._changeCSI()
         next_obs = self._csi2state()
         return next_obs, rew
+    
+    def setCSI(self, bs2user_csi, bs2ris_csi, ris2user_csi):
+        """set CSI to specific values. 
+        The shape of CSI arguments are the same with those generated from 
+        '_changeCSI' method"""
+        self.bs2user_csi = bs2user_csi
+        self.bs2ris_csi = bs2ris_csi
+        self.ris2user_csi = ris2user_csi
+        obs = self._csi2state()
+        return obs
 
 if __name__=='__main__':
     from utils import CodeBook
