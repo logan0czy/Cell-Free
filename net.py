@@ -20,6 +20,7 @@ def genLayers(sizes, activation, output_activation=nn.Identity):
     layers += [nn.Linear(sizes[-2], sizes[-1]), output_activation()]
     return nn.Sequential(*layers)
 
+@torch.no_grad()
 def sync(src_module: nn.Module, tgt_module: nn.Module, sync_rate: float):
     """synchronize source and target modules' parameters."""
     for src_param, tgt_param in zip(src_module.parameters(), tgt_module.parameters()):
