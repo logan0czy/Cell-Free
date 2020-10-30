@@ -2,6 +2,7 @@ import math
 import random
 
 import numpy as np
+import scipy.io as sio
 
 from env import Environment
 
@@ -16,6 +17,35 @@ def combineShape(length, shape=None):
     if shape is None:
         return (length, )
     return (length, shape) if np.isscalar(shape) else (length, *shape)
+
+def envToMAT(env, filepath, csi_num=500):
+    """save environment parameters to .mat file.
+
+    Parameters:
+        env : environment instance
+        filepath (string): path to save .mat file
+        csi_num (int): number of csi to save
+    """
+    env.rho = 0
+    env._changeCSI()
+    bs_num, ris_num, user_num = env.getCount()
+    bs2user_csi = np.zeros((csi_num, *env.bs2user_csi.shape), dtype=np.complex64)
+    bs2ris_csi = np.zeros((csi_num, *env.bs2ris_csi.shape), dtype=np.complex64)
+    ris2user_csi = np.zeros((csi_num, *env.ris2user_csi.shape), dtype=np.complex64)
+    for i in range(csi_num):
+        env._changeCSI()
+        bs2user_csi[i] = env.bs2user_csi
+        bs2ris_csi[i] = env.bs2ris_csi
+        ris2user_csi[i] = env.ris2user_csi
+
+    sio.savemat(filepath, mdict={'bs_atn': env.bs_atn, 'ris_atn': env.ris_atn,
+                                 'bs_num': bs_num, 'ris_num': ris_num, 'user_num': user_num,
+                                 'max_power': env.max_power, 'pl0': env.pl0,
+                                 'pl_exp': env.pl_exp, 'noise': env.noise,
+                                 'bs2user_csi': bs2user_csi,
+                                 'bs2ris_csi': bs2ris_csi,
+                                 'ris2user_csi': ris2user_csi},
+                )
 
 class CodeBook():
     """Generate the 2-D beamforming codebook"""
