@@ -1,17 +1,20 @@
 """
 The main Twin Delayed Deep Determinisic Policy Gradient Network frame.
 
-Reference: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/td3/core.py
+This module refers to OpenAI spinningup.
+Links: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/td3/core.py
 """
 import torch
 import torch.nn as nn
 
 
 def genLayers(sizes, activation, output_activation=nn.Identity):
-    """generate nn layers
+    """
+    Generate nn layers.
     
-    Parameters:
+    Args:
         sizes : each layer's size
+
         activation : hidden layer's activation function
     """
     layers = [nn.BatchNorm1d(sizes[0])]
@@ -22,7 +25,7 @@ def genLayers(sizes, activation, output_activation=nn.Identity):
 
 @torch.no_grad()
 def sync(src_module: nn.Module, tgt_module: nn.Module, sync_rate: float):
-    """synchronize source and target modules' parameters."""
+    """Synchronize source and target modules' parameters."""
     for src_param, tgt_param in zip(src_module.parameters(), tgt_module.parameters()):
         tgt_param.copy_(sync_rate*src_param + (1-sync_rate)*tgt_param)
 
