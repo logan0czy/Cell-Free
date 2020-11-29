@@ -1,67 +1,53 @@
-import math
 import random
-
 import numpy as np
 
-from env import Environment
 
+# for colorized formatting stdout
+color2num = dict(
+    gray=30,
+    red=31,
+    green=32,
+    yellow=33,
+    blue=34,
+    magenta=35,
+    cyan=36,
+    white=37,
+    crimson=38
+)
+
+def colorize(string, color, bold=False, highlight=False):
+    """
+    Colorize a string.
+
+    This function was originally written by John Schulman.
+    """
+    attr = []
+    num = color2num[color]
+    if highlight: num += 10
+    attr.append(str(num))
+    if bold: attr.append('1')
+    return '\x1b[%sm%s\x1b[0m' % (';'.join(attr), string)
 
 def combineShape(length, shape=None):
-    """
-    Reference: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/td3/core.py
-
-    Return:
-        tuple: (length, *shape)
-    """
+    """This function refers to OpenAI spinningup."""
     if shape is None:
         return (length, )
     return (length, shape) if np.isscalar(shape) else (length, *shape)
 
-class CodeBook():
-    """Generate the 2-D beamforming codebook"""
-
-    def __init__(self, codes: int, antennas: int, phases: int=16, 
-        scale: bool=False, duplicated: bool=True):
-        """
-        Parameters:
-            codes : the amount of codes
-            antennas : the amount of antennas in horizontal or vertical dimension
-            phases : the amount of available phases
-            scale : whether rescale the codebook. When the codebook is used for ris,
-                this operation must be done.
-            duplicated : if True, append the codebook's first code to end.
-        """
-        self.codes = self._generate(codes, antennas, phases, duplicated)
-        if scale:
-            self.book = self.book * math.sqrt(antennas)
-    
-    def _generate(self, codes, antennas, phases, duplicated):
-        """Generate the codebook of shape (codes, antennas)"""
-        def element(code_id: int, antenna_id: int):
-            """get the (code_id, antenna_id) element's value."""
-            temp = (code_id+codes/2) % codes
-            temp = math.floor(antenna_id*temp/(codes/phases))
-            value = 1 / math.sqrt(antennas) * np.exp(1j*2*math.pi/phases*temp)
-            return value
-
-        book = [[element(code_id, antenna_id) for antenna_id in range(antennas)]
-                for code_id in range(codes)]
-        self.book = np.array(book)
-        if duplicated:
-            self.book = np.concatenate((self.book, self.book[[0]]), axis=0)
-        return len(self.book)
-
 class Decoder():
-    """decode specific action to its real value."""
+    """Decode action to its corresponding choice."""
 
-    def __init__(self, act_range, act_choices, sat_ratio: float=0.05):
+    def __init__(self, act_range, act_choices, sat_ratio=0.05):
         """
-        Parameters:
-            act_range (tuple): range of action value, [act_low, act_high]
-            act_choices (np.array): all kinds of choices with shape (N, *)
-            sat_ratio : ratio of action range. In case of the saturation problem
-                when use 'tanh' activation function, assign the first and the last ratio of action 
-                interval to one action respectively (when the ratio value is large than 0).
+        Args:
+            act_range (tuple): Range of action value, includes (act_low, act_high)
+
+            act_choices : An array stores all kinds of choices with shape (N, *)
+
+            sat_ratio (float): Saturation ratio of action range. In case of the 
+                saturation problem when use 'tanh' activation function, assign 
+                the first and the last ratio of action interval to one action 
+                respectively (when the ratio value is larger than 0).
         """
         self.range = act_range
         self.choices = act_choices
@@ -73,11 +59,12 @@ class Decoder():
 
     def decode(self, act_val):
         """
-        Parameters:
-            act_val (np.array): array of action values with shape (d0, d1, ..., dN).
+        Args:
+            act_val : Array of action values with shape (d0, d1, ..., dN).
 
         Returns:
-            acts (np.array): real action from choices with shape (d0, d1, ..., dN, dN+1, ..., dN+choice_dim).
+            acts : Array of corresponding choices with shape 
+                (d0, d1, ..., dN, dN+1, ..., dN+choice_dim).
         """
         def discretize(val):
             if self.sat_ratio==0:
@@ -96,8 +83,10 @@ class Decoder():
         return acts
 
 class ReplayBuffer():
-    """An experience replay buffer.
-    Reference: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/td3/td3.py
+    """
+    An experience replay buffer.
+
+    Links: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/td3/td3.py
     """
 
     def __init__(self, obs_dim, act_dim, size):
@@ -116,11 +105,7 @@ class ReplayBuffer():
         self.ptr = (self.ptr+1) % self.max_size
 
     def sampleBatch(self, batch_size: int=64) -> dict: 
-        """Uniformly sample from buffer.
-
-        Returns:
-            batch of transitions.
-        """
+        """Uniformly sample from buffer."""
         idxs = np.random.randint(0, self.size, size=batch_size)
         batch = dict(obs=self.obs_buf[idxs],
                      next_obs=self.obs2_buf[idxs],
@@ -129,15 +114,22 @@ class ReplayBuffer():
         return batch
 
 class OUStrategy():
-    """This strategy implements the Ornstein-Uhlenbeck process, which adds time-correlated 
-    noise to the actions taken by the deterministic policy. The OU process satisfies the 
-    following stochastic differential equation:
+    """
+    This strategy implements the Ornstein-Uhlenbeck process.
+    
+    The OU process adds time-correlated noise to the actions taken by 
+    the deterministic policy. It satisfies the following stochastic 
+    differential equation:
+    
         dxt = theta*(mu - xt)*dt + sigma*dWt
+
     where Wt denotes the Wiener process.
 
-        Reference 1: https://towardsdatascience.com/deep-deterministic-policy-gradients-explained-2d94655a9b7b
-        Reference 2: https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process
-        Reference 3: https://github.com/vitchyr/rlkit/blob/master/rlkit/exploration_strategies/ou_strategy.py
+    Links1: https://towardsdatascience.com/deep-deterministic-policy-gradients-explained-2d94655a9b7b
+
+    Links2: https://en.wikipedia.org/wiki/Ornstein%E2%80%93Uhlenbeck_process
+
+    Links3: https://github.com/vitchyr/rlkit/blob/master/rlkit/exploration_strategies/ou_strategy.py
     """
 
     def __init__(
@@ -151,17 +143,17 @@ class OUStrategy():
             decay_period: int=10000,
     ):
         """
-        Parameters:
-            act_space : keys are {'dim', 'low', 'high'}, the 'low' & 'high' must be np.array
+        Args:
+            act_space : Keys are {'dim', 'low', 'high'}, the 'low' & 'high' must be arrays
                 with the same dim to action
 
-            max_sigma/min_sigma (np.array): stddevs for Gaussian policy noise, and each dim
+            max_sigma/min_sigma : Array of stddevs for Gaussian policy noise, and each dim
                 maybe different
 
-            noise_clip (np.array): limit for absolute value of policy noise, each dim maybe
+            noise_clip : Array of limit for absolute value of policy noise, each dim maybe
                 different
                 
-            decay_period : time steps for stddev of noise decaying from max_sigma to min_sigma.
+            decay_period : Time steps for stddev of noise decaying from max_sigma to min_sigma.
         """
         self.act_space = act_space
         self.mu = mu
@@ -192,9 +184,3 @@ class OUStrategy():
             * min(1.0, time_step*1.0/self._decay_period)
         )
         return np.clip(raw_act + ou_state, self.act_space['low'], self.act_space['high'])
-
-if __name__=='__main__':
-    env = Environment(30)
-    bs_cbook = CodeBook(16, env.bs_atn)
-    ris_azi_cbook = CodeBook(10, env.ris_atn[0], phases=8, scale=True)
-    ris_ele_cbook = CodeBook(20, env.ris_atn[1], phases=8, scale=True)
