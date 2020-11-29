@@ -166,7 +166,7 @@ def train(
         logger_kwargs (dict): Kewword arguments for EpochLogger.
     """
     logger = EpochLogger(**logger_kwargs)
-    logger.saveConfig(locals())
+    logger.saveConfig(locals(), stdout=False)
 
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -208,7 +208,7 @@ def train(
     for param in tgt_model.parameters():
         param.requires_grad = False
     # logger.log(f"models created... the devices are: main model:{main_model.device}, target model:{tgt_model.device}", 'magenta')
-    print("models created... the devices are: main model:{main_model.device}, target model:{tgt_model.device}")
+    print(f"models created... the devices are: main model:{main_model.device}, target model:{tgt_model.device}")
 
     logger.setup_pytorch_saver(main_model)
 
@@ -406,7 +406,7 @@ def train(
             logger.logTabular('LossPi', average_only=True)
             logger.logTabular('LossQ', average_only=True)
             logger.logTabular('Time', time_pass)
-            logger.dumpTabular(False)
+            logger.dumpTabular(stdout=False)
 
             gc.collect()
 
@@ -443,8 +443,8 @@ if __name__=='__main__':
     main_fold = osp.join('Experiment', 'optimal')
     os.makedirs(main_fold, exist_ok=True)
 
-    seeds = np.arange(0, 100, 10, dtype=np.int16)
-    powers = np.arange(0, 35, 5, dtype=np.int16)
+    seeds = list(range(0, 100, 10))
+    powers = list(range(0, 35, 5))
     for idx, seed in enumerate(seeds):
         fold = osp.join(main_fold, 'seed%d'%(idx+1))
         os.makedirs(fold, exist_ok=True)

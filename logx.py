@@ -64,7 +64,7 @@ class Logger():
         """Print a colorized message to stdout."""
         print(colorize(msg, color, bold=True))
         
-    def saveConfig(self, config):
+    def saveConfig(self, config, stdout=True):
         """
         Log an experiment configuration.
 
@@ -84,8 +84,9 @@ class Logger():
         if self.exp_name is not None:
             config_json['exp_name'] = self.exp_name
         output = json.dumps(config_json, separators=(',',':\t'), indent=4, sort_keys=True)
-        print(colorize('Saving config:\n', color='cyan', bold=True))
-        print(output)
+        if stdout:
+            print(colorize('Saving config:\n', color='cyan', bold=True))
+            print(output)
         with open(osp.join(self.output_dir, "config.json"), 'w') as out:
             out.write(output)
 
@@ -116,14 +117,13 @@ class Logger():
         keystr = '%'+'%d'%max_key_len
         fmt = "| " + keystr + "s | %15s |"
         n_slashes = 22 + max_key_len
-        if stdout:
-            print("-"*n_slashes)
-            for key in self.log_headers:
-                val = self.log_cur_row.get(key, "")
-                valstr = "%8.3g"%val if hasattr(val, "__float__") else val
-                print(fmt%(key, valstr))
-                vals.append(val)
-            print("-"*n_slashes, flush=True)
+        if stdout: print("-"*n_slashes)
+        for key in self.log_headers:
+            val = self.log_cur_row.get(key, "")
+            valstr = "%8.3g"%val if hasattr(val, "__float__") else val
+            if stdout: print(fmt%(key, valstr))
+            vals.append(val)
+        if stdout: print("-"*n_slashes, flush=True)
 
         column_width = max_key_len + 2
         if self.output_file is not None:
