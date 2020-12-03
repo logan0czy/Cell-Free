@@ -38,7 +38,7 @@ def combineShape(length, shape=None):
 class Decoder():
     """Decode action to its corresponding choice."""
 
-    def __init__(self, act_range, act_choices, sat_ratio=0.05):
+    def __init__(self, act_range, act_choices, sat_ratio=0.):
         """
         Args:
             act_range (tuple): Range of action value, includes (act_low, act_high)
@@ -49,6 +49,7 @@ class Decoder():
                 saturation problem when use 'tanh' activation function, assign 
                 the first and the last ratio of action interval to one action 
                 respectively (when the ratio value is larger than 0).
+                From practice, it's shown that this value being 0. is btter.
         """
         self.range = act_range
         self.choices = act_choices
