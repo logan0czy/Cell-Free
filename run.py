@@ -10,6 +10,8 @@ import os
 from os import path as osp
 # from IPython.display import clear_output
 from tqdm import tqdm
+import json
+import joblib
 import numpy as np
 import torch
 import torch.nn as nn
@@ -343,9 +345,10 @@ def train(
             #     avg_lossQ = logger.getStats('LossQ')[0]
             #     print(f"step: {step}, avg. rew: {avg_rew:.2f}, avg. lossQ: {avg_lossQ:.2f}")
 
+            # print(test('Testdata', env=env, model=model, decoders=decoders))
+
         if (step+1) % steps_per_epoch == 0:
             # reset some process
-            # obs = env.reset(seed)
             act_ous.reset()
             tgt_ous.reset()
             q_scheduler.step()
@@ -388,20 +391,39 @@ def train(
 
     return largest_EpRew
 
-def test(env, model, decoders, 
-        bs2user_CSI, bs2ris_CSI, ris2user_CSI
-):
-    """
-    Args:
-        bs2user_CSI : Array of shape (N, bs_num, user_num, bs_atn)
+def test(test_fpath, config_fpath=None, env=None, model=None, decoders=None):
+    """Test model performance.
 
-        bs2ris_CSI : Array of shape (N, bs_num, ris_num, ris_atn, bs_atn)
-
-        ris2user_CSI : Array of shape (N, ris_num, user_num, ris_atn)
+    Note: Only one set of Args: {config_fpath} and {env, model, decoders} can
+    be specified.
     """
+    BS2USER_CSI = np.load(osp.join(test_fpath, 'bs2user_csi.npy'))
+    BS2RIS_CSI = np.load(osp.join(test_fpath, 'bs2ris_csi.npy'))
+    RIS2USER_CSI = np.load(osp.join(test_fpath, 'ris2user_csi.npy'))
+    if config_fpath:
+        with open(osp.join(config_fpath, 'config.json'), 'r') as f:
+            configs = json.load(f)
+        env = Environment(**configs['env_kwargs'])
+        model = ActorCritic(env.obs_dim, env.act_dim, **configs['net_kwargs'])
+        state_dict = joblib.load(osp.join(config_fpath, 'pyt_save', 'weights', 'vars.pkl'))
+        model.load_state_dict(state_dict)
+        bs_cbook = CodeBook(configs['cbook_kwargs']['bs_codes'], env.bs_atn, 
+            configs['cbook_kwargs']['bs_phases'])
+        ris_ele_cbook = CodeBook(configs['cbook_kwargs']['ris_ele_codes'], env.ris_atn[1], 
+            configs['cbook_kwargs']['ris_ele_phases'], scale=True)
+        ris_azi_cbook = CodeBook(configs['cbook_kwargs']['ris_azi_codes'], env.ris_atn[0], 
+            configs['cbook_kwargs']['ris_azi_phases'], scale=True)
+        decoders = dict(bs_azi=Decoder((-configs['net_kwargs']['act_limit'], configs['net_kwargs']['act_limit']),
+                            bs_cbook.book),
+                        ris_ele=Decoder((-configs['net_kwargs']['act_limit'], configs['net_kwargs']['act_limit']),
+                            ris_ele_cbook.book),
+                        ris_azi=Decoder((-configs['net_kwargs']['act_limit'], configs['net_kwargs']['act_limit']),
+                            ris_azi_cbook.book)
+        )
+
     sum_rate = 0
     count = 0
-    for bs2user_csi, bs2ris_csi, ris2user_csi in zip(bs2user_CSI, bs2ris_CSI, ris2user_CSI):
+    for bs2user_csi, bs2ris_csi, ris2user_csi in zip(BS2USER_CSI, BS2RIS_CSI, RIS2USER_CSI):
         obs = env.setCSI(bs2user_csi, bs2ris_csi, ris2user_csi)
         obs = torch.as_tensor([obs], dtype=torch.float32, device=model.device)
         act = model.act(obs).squeeze(0).cpu().numpy()
