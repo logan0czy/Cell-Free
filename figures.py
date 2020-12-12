@@ -39,25 +39,27 @@ def subplot3D(ax, code_azi, code_ele, ant_azi_num, ant_ele_num):
     my_color = cm.jet(values / np.amax(values))
     surf = ax.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=my_color, cmap=plt.get_cmap('jet'),
         linewidth=0, antialiased=False, alpha=0.5)
-    plt.colorbar(surf, pad=0.1)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    plt.colorbar(surf, pad=0.05)
 
 if __name__=='__main__':
-    sns.set()
+    sns.set_theme(context='paper', style='whitegrid', palette='bright', font_scale=1.2)
     bs_cbook = CodeBook(8, 4, duplicated=False)
-    ris_azi_cbook = CodeBook(2, 4, phases=4, scale=True, duplicated=False)
-    ris_ele_cbook = CodeBook(2, 4, phases=4, scale=True, duplicated=False)
+    ris_azi_cbook = CodeBook(3, 4, phases=4, scale=True, duplicated=False)
+    ris_ele_cbook = CodeBook(3, 4, phases=4, scale=True, duplicated=False)
     # -------- show beamforming pattern --------
     plt.figure(figsize=(8, 8))
     ax = plt.subplot(111, polar=True)
     plot2D(ax, bs_cbook, 4)
-    plt.title("2-D beamforming with %ddirections"%bs_cbook.codes)
-    plt.legend()
+    # plt.title("2-D beamforming with %ddirections"%bs_cbook.codes)
     
-    plt.figure(figsize=(12, 12))
+    plt.figure(figsize=(8, 8))
     for id_h in range(ris_azi_cbook.codes):
         for id_v in range(ris_ele_cbook.codes):
             ax = plt.subplot(ris_azi_cbook.codes, ris_ele_cbook.codes, id_h*ris_azi_cbook.codes+id_v+1, projection='3d')
             subplot3D(ax, ris_azi_cbook.book[id_h], ris_ele_cbook.book[id_v], 4, 4)
-            ax.set_title(f"azi id-{id_h}, ele id-{id_v}")
-    plt.suptitle(f"3-D beamforming", y=0.95)
+            ax.set_title(f"azi-{id_h}  ele-{id_v}")
+    # plt.suptitle(f"3-D beamforming", y=0.95)
     plt.show()
