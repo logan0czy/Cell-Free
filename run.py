@@ -434,35 +434,37 @@ def test(test_fpath, config_fpath=None, env=None, model=None, decoders=None):
     return sum_rate / count
 
 if __name__=='__main__':
-    main_fold = osp.join('Experiment', 'optimal')
+    main_fold = osp.join('Experiment', 'compare_noise')
     os.makedirs(main_fold, exist_ok=True)
 
-    # seeds = list(range(0, 100, 10))
-    seeds = [80, 90]
-    powers = list(range(0, 35, 5))
+    seeds = range(50, 100, 10)
+    powers = [10, 20, 30]
+    bases = (1, 2, 4)
+    scales = range(1, 7)
     for seed in seeds:
-        fold = osp.join(main_fold, 'seed%d'%(seed//10))
-        os.makedirs(fold, exist_ok=True)
-
-        results = []
         for power in powers:
-            output_dir = osp.join(fold, 'power%d'%power)
-            kwargs = dict(
-                seed=seed,
-                env_kwargs = {'max_power': power, 'bs_atn': 4, 'ris_atn': (8, 4)},
-                net_kwargs = {
-                    'critic_hidden_sizes': [512, 128, 32, 16], 
-                    'actor_hidden_sizes': [512, 256, 128, 64],
-                    'act_limit': 1},
-                cbook_kwargs = {
-                    'bs_codes': 50, 
-                    'ris_ele_codes': 50, 
-                    'ris_azi_codes': 50,
-                    'bs_phases': 16,
-                    'ris_azi_phases': 4,
-                    'ris_ele_phases': 4},
-                logger_kwargs = {'output_dir': output_dir},
-                lr_decay=0.96, epochs=50, gpu='cuda:2', 
-            )
-            results.append(train(**kwargs))
-        np.save(osp.join(fold, 'opt_res'), np.array(results))
+            fold = osp.join(main_fold, 'seed%d'%(seed//10), 'power%d'%power)
+            os.makedirs(fold, exist_ok=True)
+
+            for scale in scales:
+                output_dir = osp.join(fold, 'degree%d'%scale)
+                kwargs = dict(
+                    seed=seed,
+                    env_kwargs = {'max_power': power, 'bs_atn': 4, 'ris_atn': (8, 4)},
+                    net_kwargs = {
+                        'critic_hidden_sizes': [512, 128, 32, 16], 
+                        'actor_hidden_sizes': [512, 256, 128, 64],
+                        'act_limit': 1},
+                    cbook_kwargs = {
+                        'bs_codes': 50, 
+                        'ris_ele_codes': 50, 
+                        'ris_azi_codes': 50,
+                        'bs_phases': 16,
+                        'ris_azi_phases': 4,
+                        'ris_ele_phases': 4},
+                    logger_kwargs = {'output_dir': output_dir},
+                    lr_decay=0.96, epochs=50, gpu='cuda:1', 
+                    act_noise=bases[0]*10**(-scale), tgt_noise=bases[1]*10**(-scale),
+                    noise_clip=bases[2]*10**(-scale), 
+                )
+                train(**kwargs)
