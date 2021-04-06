@@ -54,7 +54,7 @@ if __name__=='__main__':
     fig = plt.figure(figsize=(8, 8))
     ax = plt.subplot(111, polar=True)
     plot2D(ax, bs_cbook, 4)
-    fig.savefig(osp.join('figures', 'ULA_resp.png'), dpi=fig_dpi, bbox_inches='tight')
+    fig.savefig(osp.join('figures', 'ULA_resp.pdf'), dpi=fig_dpi, bbox_inches='tight')
     
     fig = plt.figure(figsize=(8, 8))
     for id_h in range(ris_azi_cbook.codes):
@@ -64,5 +64,5 @@ if __name__=='__main__':
             # ax.set_title(f"{id_h}-{id_v}")
     # plt.subplots_adjust(wspace=0.2, hspace=0.2)
     fig.tight_layout()
-    fig.savefig(osp.join('figures', 'URA_resp.png'), dpi=fig_dpi, bbox_inches='tight')
+    fig.savefig(osp.join('figures', 'URA_resp.pdf'), dpi=fig_dpi, bbox_inches='tight')
     # plt.show()
